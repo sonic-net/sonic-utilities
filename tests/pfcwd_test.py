@@ -4,6 +4,7 @@ import os
 import sys
 from unittest.mock import patch, MagicMock
 
+import pytest
 from click.testing import CliRunner
 from swsscommon import swsscommon
 
@@ -717,6 +718,298 @@ class TestPfcwd(object):
         with patch.object(db.cfgdb, 'get_table', side_effect=mock_get_table), \
                 patch.object(db.cfgdb, 'get_entry', side_effect=mock_get_entry):
             return CliRunner().invoke(pfcwd.cli.commands["start_default"], [], obj=db)
+
+    @staticmethod
+    def _set_pfcwd_table(db, ports, timer, poll_interval, action='drop', extra_global=None):
+        """Replace PFC_WD with one row per port at `timer` ms and a GLOBAL row."""
+        for key in db.cfgdb.get_table("PFC_WD"):
+            db.cfgdb.set_entry("PFC_WD", key, None)
+        for port in ports:
+            db.cfgdb.set_entry("PFC_WD", port, {
+                'action': action, 'detection_time': str(timer),
+                'restoration_time': str(timer), 'pfc_stat_history': 'disable'})
+        global_entry = {'POLL_INTERVAL': str(poll_interval)}
+        global_entry.update(extra_global or {})
+        db.cfgdb.set_entry("PFC_WD", "GLOBAL", global_entry)
+
+    SW_DEFAULT_PORTS = ['Ethernet0', 'Ethernet4']
+
+    @staticmethod
+    def _sw_default_table(timer, poll_interval, ports=SW_DEFAULT_PORTS):
+        table = {port: {'action': 'drop', 'detection_time': str(timer),
+                        'restoration_time': str(timer), 'pfc_stat_history': 'disable'}
+                 for port in ports}
+        table['GLOBAL'] = {'POLL_INTERVAL': str(poll_interval)}
+        return table
+
+    def test_pfcwd_sw_default_multiplier_matches_start_default_output(self):
+        """What software-mode start_default writes, for any port count."""
+        import pfcwd.main as pfcwd
+        assert pfcwd.sw_default_multiplier(self._sw_default_table(200, 200), {1}, self.SW_DEFAULT_PORTS) == 1
+        assert pfcwd.sw_default_multiplier(self._sw_default_table(1600, 1000), {8}, self.SW_DEFAULT_PORTS) == 8
+        # 512 ports: the poll interval is capped at 1000 ms
+        assert pfcwd.sw_default_multiplier(self._sw_default_table(3200, 1000), {16}, self.SW_DEFAULT_PORTS) == 16
+        # stat history enabled later does not change where the timers came from
+        table = self._sw_default_table(1600, 1000)
+        table['Ethernet4']['pfc_stat_history'] = 'enable'
+        assert pfcwd.sw_default_multiplier(table, {8}, self.SW_DEFAULT_PORTS) == 8
+
+    def test_pfcwd_sw_default_multiplier_checks_port_count(self):
+        """A uniform table only counts as start_default output if its multiplier fits the box:
+        start_default never writes 200 ms on a 128-port box, so 200 ms there was set by hand."""
+        import pfcwd.main as pfcwd
+        box_128 = {4}
+        assert pfcwd.sw_default_multiplier(self._sw_default_table(800, 800), box_128, self.SW_DEFAULT_PORTS) == 4
+        assert pfcwd.sw_default_multiplier(self._sw_default_table(200, 200), box_128, self.SW_DEFAULT_PORTS) is None
+        assert pfcwd.sw_default_multiplier(self._sw_default_table(1600, 1000), box_128, self.SW_DEFAULT_PORTS) is None
+        # 8 PFC ports among 256 PORT entries: today's count or the older every-PORT count
+        box_8_of_256 = {1, 8}
+        assert pfcwd.sw_default_multiplier(self._sw_default_table(200, 200), box_8_of_256, self.SW_DEFAULT_PORTS) == 1
+        assert pfcwd.sw_default_multiplier(self._sw_default_table(1600, 1000), box_8_of_256, self.SW_DEFAULT_PORTS) == 8
+        assert pfcwd.sw_default_multiplier(
+            self._sw_default_table(800, 800), box_8_of_256, self.SW_DEFAULT_PORTS) is None
+
+    def test_pfcwd_sw_default_multiplier_older_image_tables(self):
+        """202505 start_default writes no stat history and does not cap the poll interval."""
+        import pfcwd.main as pfcwd
+        table = self._sw_default_table(1600, 1600)
+        for entry in table.values():
+            entry.pop('pfc_stat_history', None)
+        assert pfcwd.sw_default_multiplier(table, {8}, self.SW_DEFAULT_PORTS) == 8
+        # the poll interval must still be one start_default writes for that multiplier
+        table['GLOBAL']['POLL_INTERVAL'] = '1200'
+        assert pfcwd.sw_default_multiplier(table, {8}, self.SW_DEFAULT_PORTS) is None
+
+    def test_pfcwd_sw_default_multipliers(self):
+        """The multipliers come from the PFC-enabled neighbour and backplane ports, and from
+        every PORT entry for tables saved by images that scaled by that."""
+        import pfcwd.main as pfcwd
+
+        def multipliers(pfc_ports, port_entries, bp_ports=()):
+            tables = {
+                'PORT': dict({port: {} for port in port_entries},
+                             **{port: {'admin_status': 'up', 'role': 'Int'} for port in bp_ports}),
+                'DEVICE_NEIGHBOR': {port: {} for port in pfc_ports},
+                'PORT_QOS_MAP': {port: {'pfc_enable': '3,4'} for port in list(pfc_ports) + list(bp_ports)},
+            }
+            db = Db()
+            with patch.object(db.cfgdb, 'get_table', side_effect=lambda table: tables.get(table, {})):
+                return pfcwd.sw_default_multipliers(db.cfgdb)
+
+        ports = ['Ethernet%d' % (i * 4) for i in range(256)]
+        assert multipliers(ports[:128], ports[:128]) == {4}
+        assert multipliers(ports, ports) == {8}
+        assert multipliers(ports[:8], ports) == {1, 8}
+        # 32 PFC ports stay on 1; the 33rd, here a backplane port, moves to 2
+        assert multipliers(ports[:32], ports[:32]) == {1}
+        assert multipliers(ports[:32], ports[:32], bp_ports=['Ethernet-BP0']) == {2}
+
+    def test_pfcwd_sw_default_multiplier_rejects_changed_tables(self):
+        """A table any other command has touched is not taken for start_default output."""
+        import pfcwd.main as pfcwd
+
+        def changed(edit):
+            table = self._sw_default_table(1600, 1000)
+            edit(table)
+            return table
+
+        tables = {
+            'port timer changed': changed(lambda t: t['Ethernet4'].update(
+                {'detection_time': '400', 'restoration_time': '400'})),
+            'detection differs from restoration': changed(lambda t: t['Ethernet4'].update(
+                {'restoration_time': '800'})),
+            'action changed': changed(lambda t: t['Ethernet4'].update({'action': 'forward'})),
+            'big red switch set': changed(lambda t: t['GLOBAL'].update({'BIG_RED_SWITCH': 'enable'})),
+            'poll interval changed': changed(lambda t: t['GLOBAL'].update({'POLL_INTERVAL': '500'})),
+            'no GLOBAL row': changed(lambda t: t.pop('GLOBAL')),
+            'not a multiple of the default': self._sw_default_table(1500, 1000),
+            'hardware-mode defaults': {port: entry for port, entry in
+                                       self._sw_default_table(200, 200).items() if port != 'GLOBAL'},
+            # 'pfcwd stop' deletes the port's row; start_default would turn it back on
+            'port stopped': changed(lambda t: t.pop('Ethernet4')),
+            'port not configured by start_default': changed(lambda t: t.update(
+                {'Ethernet8': dict(t['Ethernet0'])})),
+        }
+        for name, table in tables.items():
+            assert pfcwd.sw_default_multiplier(table, {1, 8}, self.SW_DEFAULT_PORTS) is None, name
+
+    @patch('pfcwd.main.os')
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    def test_pfcwd_start_default_hw_mode_replaces_sw_defaults(self, mock_os):
+        """In HW mode start_default turns software-mode output into the HW defaults, after
+        which the table no longer matches, so running it again changes nothing."""
+        import pfcwd.main as pfcwd
+        mock_os.geteuid.return_value = 0
+        db = Db()
+        self._set_pfcwd_table(db, ['Ethernet0'], 1600, 1000, extra_global={'BIG_RED_SWITCH': 'enable'})
+
+        result = self._run_start_default_with_ports(db, ['Ethernet0'])
+
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry("PFC_WD", "Ethernet0")['detection_time'] == '200'
+        assert db.cfgdb.get_entry("PFC_WD", "Ethernet0")['restoration_time'] == '200'
+        # only the software watchdog's POLL_INTERVAL goes
+        assert db.cfgdb.get_entry("PFC_WD", "GLOBAL") == {'BIG_RED_SWITCH': 'enable'}
+
+        db.cfgdb.set_entry("PFC_WD", "GLOBAL", None)
+        assert pfcwd.sw_default_multiplier(db.cfgdb.get_table("PFC_WD"), {1, 8}, ['Ethernet0']) is None
+
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_default_keeps_pfc_stat_history(self, mock_os):
+        """start_default keeps each port's own stat history setting and does not carry one
+        port's setting over to the next."""
+        mock_os.geteuid.return_value = 0
+        db = Db()
+        self._set_pfcwd_table(db, ['Ethernet0', 'Ethernet4'], 600, 600)
+        db.cfgdb.mod_entry("PFC_WD", "Ethernet0", {'pfc_stat_history': 'enable'})
+
+        result = self._run_start_default_with_ports(db, ['Ethernet0', 'Ethernet4', 'Ethernet8'])
+
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry("PFC_WD", "Ethernet0")['pfc_stat_history'] == 'enable'
+        assert db.cfgdb.get_entry("PFC_WD", "Ethernet4")['pfc_stat_history'] == 'disable'
+        # a port with no row yet gets the default
+        assert db.cfgdb.get_entry("PFC_WD", "Ethernet8")['pfc_stat_history'] == 'disable'
+
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_keeps_pfc_stat_history(self, mock_os):
+        """pfcwd start without --pfc-stat-history keeps each port's own setting instead of
+        copying the first port's to the rest."""
+        import pfcwd.main as pfcwd
+        mock_os.geteuid.return_value = 0
+        db = Db()
+        db.cfgdb.mod_entry("PFC_WD", "Ethernet0", {'pfc_stat_history': 'enable'})
+
+        result = CliRunner().invoke(pfcwd.cli.commands["start"],
+                                    ["Ethernet0", "Ethernet4", "700", "-r", "700"], obj=db)
+
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry("PFC_WD", "Ethernet0")['pfc_stat_history'] == 'enable'
+        assert db.cfgdb.get_entry("PFC_WD", "Ethernet4")['pfc_stat_history'] == 'disable'
+
+    HW_LIMITS = {'detection_min': 1, 'detection_max': 1500,
+                 'restoration_min': 100, 'restoration_max': 1000}
+    LOW_MIN_LIMITS = {'detection_min': 10, 'detection_max': 1500,
+                      'restoration_min': 10, 'restoration_max': 1000}
+
+    def test_pfcwd_hw_recovery_limits(self):
+        import pfcwd.main as pfcwd
+        assert pfcwd.hw_recovery_limits({}) is None
+        assert pfcwd.hw_recovery_limits(None) is None
+        assert pfcwd.hw_recovery_limits({'RECOVERY_MECHANISM': 'SOFTWARE'}) is None
+        assert pfcwd.hw_recovery_limits({
+            'RECOVERY_MECHANISM': 'HARDWARE', 'DETECTION_TIME_MIN': '1', 'DETECTION_TIME_MAX': '1500',
+            'RESTORATION_TIME_MIN': '100', 'RESTORATION_TIME_MAX': '1000'}) == self.HW_LIMITS
+        # a limit that is missing or does not parse is None
+        assert pfcwd.hw_recovery_limits({
+            'RECOVERY_MECHANISM': 'hardware', 'DETECTION_TIME_MIN': 'x', 'DETECTION_TIME_MAX': '1500'}) == {
+            'detection_min': None, 'detection_max': 1500, 'restoration_min': None, 'restoration_max': None}
+
+    @pytest.mark.parametrize("value, expected", [
+        ("1500", 1500), (1500, 1500), ("+200", 200), (" 200", 200),
+        # base 0, as orchagent's to_uint reads it: a leading 0 is octal, 0x hex
+        ("0120", 80), ("02000", 1024), ("0x7d0", 2000), ("0X7D0", 2000), ("0", 0),
+        # orchagent refuses anything after the number, an invalid octal digit and a bare 0x
+        ("200 ", None), ("2000ms", None), ("0800", None), ("0x", None), ("", None),
+        ("abc", None), ("-1", None), (None, None), (True, None),
+    ])
+    def test_pfcwd_parse_timer(self, value, expected):
+        import pfcwd.main as pfcwd
+        assert pfcwd.parse_timer(value) == expected
+
+    def test_pfcwd_timers_outside_range(self):
+        import pfcwd.main as pfcwd
+        ranges = pfcwd.configurable_limits(self.HW_LIMITS)
+        assert pfcwd.timers_outside_range(
+            {'detection_time': '0x7d0', 'restoration_time': '0120', 'action': 'drop'}, ranges) == \
+            ({'detection_time': 2000, 'restoration_time': 80}, [])
+        assert pfcwd.timers_outside_range({'detection_time': '02000', 'restoration_time': '1000'}, ranges) == \
+            ({}, [])
+        # a value orchagent cannot read is reported whether or not its timer has a range
+        assert pfcwd.timers_outside_range({'detection_time': '0800', 'restoration_time': 'abc'}, {}) == \
+            ({}, ['detection_time', 'restoration_time'])
+
+    def test_pfcwd_hw_range_updates_reads_timers_as_orchagent(self):
+        """A leading 0 is octal and 0x hex, as orchagent reads the row."""
+        import pfcwd.main as pfcwd
+        table = {
+            'Ethernet0': {'detection_time': '0120', 'restoration_time': '0x7d0', 'action': 'drop'},
+            'Ethernet4': {'detection_time': '02000', 'restoration_time': '0144', 'action': 'drop'},
+            'Ethernet8': {'detection_time': '0800', 'restoration_time': '0x', 'action': 'drop'},
+        }
+        assert pfcwd.hw_range_updates(table, self.HW_LIMITS) == {
+            'Ethernet0': {'detection_time': 100, 'restoration_time': 1000},
+        }
+
+    def test_pfcwd_hw_range_updates(self):
+        """Out-of-range timers go to the nearest bound; everything else is left alone."""
+        import pfcwd.main as pfcwd
+        table = {
+            'Ethernet0': {'detection_time': '1600', 'restoration_time': '1600', 'action': 'drop'},
+            'Ethernet4': {'detection_time': '400', 'restoration_time': '50', 'action': 'drop'},
+            'Ethernet8': {'detection_time': '400', 'restoration_time': '400', 'action': 'drop'},
+            'Ethernet12': {'detection_time': 'abc', 'restoration_time': '2000', 'action': 'drop'},
+            'GLOBAL': {'POLL_INTERVAL': '1000'},
+        }
+        assert pfcwd.hw_range_updates(table, self.HW_LIMITS) == {
+            'Ethernet0': {'detection_time': 1500, 'restoration_time': 1000},
+            'Ethernet4': {'restoration_time': 100},
+            'Ethernet12': {'restoration_time': 1000},
+        }
+        # a limit pair that is not reported, or has a 0 maximum, is not checked
+        for unreported in (0, None):
+            no_detection_range = dict(self.HW_LIMITS, detection_min=unreported, detection_max=unreported)
+            assert pfcwd.hw_range_updates(table, no_detection_range)['Ethernet0'] == {'restoration_time': 1000}
+        # a 0 minimum is a bound: orchagent checks it, and the timer is still clamped to the maximum
+        zero_min = dict(self.HW_LIMITS, detection_min=0)
+        assert pfcwd.hw_range_updates(table, zero_min)['Ethernet0'] == {
+            'detection_time': 1500, 'restoration_time': 1000}
+        # no detection time is in both the hardware range and sonic-pfcwd.yang's: left alone
+        no_common_detection = dict(self.HW_LIMITS, detection_max=15)
+        assert pfcwd.hw_range_updates(table, no_common_detection)['Ethernet0'] == {'restoration_time': 1000}
+        # a hardware minimum below sonic-pfcwd.yang's 100 ms is not used
+        assert pfcwd.hw_range_updates(
+            {'Ethernet4': {'detection_time': '50', 'restoration_time': '5', 'action': 'drop'}},
+            self.LOW_MIN_LIMITS) == {'Ethernet4': {'detection_time': 100, 'restoration_time': 100}}
+
+    def test_pfcwd_apply_hw_range(self):
+        """CONFIG_DB ends up holding only what the hardware programs, and a second pass
+        changes nothing."""
+        import pfcwd.main as pfcwd
+        db = Db()
+        self._set_pfcwd_table(db, ['Ethernet0', 'Ethernet4', 'Ethernet8'], 400, 1000,
+                              extra_global={'BIG_RED_SWITCH': 'enable'})
+        db.cfgdb.mod_entry("PFC_WD", "Ethernet0", {'detection_time': '1600', 'restoration_time': '1600'})
+        db.cfgdb.mod_entry("PFC_WD", "Ethernet4", {'pfc_stat_history': 'enable', 'restoration_time': '50'})
+
+        updates = pfcwd.apply_hw_range(db.cfgdb, self.HW_LIMITS)
+
+        assert updates == {'Ethernet0': {'detection_time': 1500, 'restoration_time': 1000},
+                           'Ethernet4': {'restoration_time': 100}}
+        assert db.cfgdb.get_entry("PFC_WD", "Ethernet0") == {
+            'action': 'drop', 'detection_time': '1500', 'restoration_time': '1000',
+            'pfc_stat_history': 'disable'}
+        assert db.cfgdb.get_entry("PFC_WD", "Ethernet4") == {
+            'action': 'drop', 'detection_time': '400', 'restoration_time': '100',
+            'pfc_stat_history': 'enable'}
+        assert db.cfgdb.get_entry("PFC_WD", "Ethernet8")['detection_time'] == '400'
+        # an operator's BIG_RED_SWITCH stays; only the software POLL_INTERVAL goes
+        assert db.cfgdb.get_entry("PFC_WD", "GLOBAL") == {'BIG_RED_SWITCH': 'enable'}
+
+        before = db.cfgdb.get_table("PFC_WD")
+        assert pfcwd.apply_hw_range(db.cfgdb, self.HW_LIMITS) == {}
+        assert db.cfgdb.get_table("PFC_WD") == before
+
+    def test_pfcwd_apply_hw_range_removes_poll_only_global(self):
+        """A GLOBAL row holding only the software POLL_INTERVAL, as start_default writes on a
+        first boot from minigraph, is removed altogether."""
+        import pfcwd.main as pfcwd
+        db = Db()
+        self._set_pfcwd_table(db, ['Ethernet0'], 200, 200)
+
+        assert pfcwd.apply_hw_range(db.cfgdb, self.HW_LIMITS) == {}
+        assert db.cfgdb.get_entry("PFC_WD", "GLOBAL") == {}
+        assert "GLOBAL" not in db.cfgdb.get_table("PFC_WD")
 
     @patch('pfcwd.main.os')
     def test_pfcwd_start_default_512_ports(self, mock_os):

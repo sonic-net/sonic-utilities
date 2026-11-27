@@ -1,0 +1,212 @@
+#!/usr/bin/env python3
+"""
+Make the PFC_WD config of a hardware PFC watchdog hold what the hardware programs.
+
+'pfcwd start_default' scales the timers with the port count only for the software
+watchdog, and it learns which watchdog runs from STATE_DB, which orchagent fills when it
+starts. A first boot from minigraph runs start_default from config-setup before that, and
+a config saved by an image that ran the software watchdog carries the same values. orchagent
+refuses timers outside the hardware range, so CONFIG_DB and the hardware would disagree.
+
+Run at boot once swss has started. In each namespace where orchagent reports the hardware
+watchdog:
+  1. if PFC_WD is still exactly software-mode start_default output, run start_default again,
+     which writes the hardware defaults;
+  2. bring any timer still outside the hardware range to the nearest value both the hardware
+     and sonic-pfcwd.yang allow, and remove the software watchdog's POLL_INTERVAL.
+
+It changes nothing where orchagent reports the software watchdog, where the switch lacks the
+capability the hardware watchdog needs, or where no mode is reported in time.
+"""
+
+import subprocess
+import sys
+import time
+
+from sonic_py_common import logger, multi_asic
+from utilities_common.general import load_db_config
+
+from pfcwd.main import (DEFAULT_DETECTION_TIME, apply_hw_range, configurable_limits, hw_recovery_limits,
+                        remove_poll_interval, start_default_pfc_ports, sw_default_multiplier,
+                        sw_default_multipliers)
+
+SYSLOG_IDENTIFIER = 'pfcwd_hw_defaults'
+PFCWD = '/usr/local/bin/pfcwd'
+# orchagent writes the mode once syncd has created the switch, which can take many minutes
+MODE_WAIT_SECONDS = 1800
+# orchagent writes the ranges right after the mode, in the same constructor
+RANGE_WAIT_SECONDS = 10
+POLL_SECONDS = 2
+STATE_KEY = 'PFC_WD_STATE_TABLE|PFC_WD'
+CAPABILITY_KEY = 'SWITCH_CAPABILITY|switch'
+
+log = logger.Logger(SYSLOG_IDENTIFIER)
+# every run says what it did, including when it changes nothing
+log.set_min_log_priority_info()
+
+
+def wait_for_state(state_db, field, deadline):
+    while True:
+        entry = state_db.get_all(state_db.STATE_DB, STATE_KEY) or {}
+        if entry.get(field) or time.monotonic() >= deadline:
+            return entry
+        time.sleep(POLL_SECONDS)
+
+
+def wait_for_mode(state_db, deadline):
+    """Return the watchdog mode orchagent reports, or '' if there is none by the deadline.
+
+    The hardware watchdog needs SAI_QUEUE_ATTR_ENABLE_PFC_DLDR, which orchagent publishes as
+    PFC_DLDR_CAPABLE on every platform. Where it is false the mode cannot be hardware, so there
+    is no need to wait for one; not every watchdog reports its mode.
+    """
+    while True:
+        entry = state_db.get_all(state_db.STATE_DB, STATE_KEY) or {}
+        mechanism = entry.get('RECOVERY_MECHANISM', '')
+        if mechanism:
+            return mechanism.lower()
+        capability = state_db.get_all(state_db.STATE_DB, CAPABILITY_KEY) or {}
+        if capability.get('PFC_DLDR_CAPABLE', '').lower() == 'false':
+            return 'without the PFC deadlock recovery capability the hardware watchdog needs'
+        if time.monotonic() >= deadline:
+            return ''
+        time.sleep(POLL_SECONDS)
+
+
+def where(namespace):
+    return " in namespace '{}'".format(namespace) if namespace else ""
+
+
+def hw_namespace(namespace, mode_deadline):
+    """Return (config_db, limits) if orchagent runs the hardware watchdog in this namespace,
+    otherwise None. limits is None when orchagent reports no timer range."""
+    config_db = multi_asic.connect_config_db_for_ns(namespace)
+    state_db = multi_asic.connect_to_all_dbs_for_ns(namespace)
+    mechanism = wait_for_mode(state_db, mode_deadline)
+    if mechanism.lower() != 'hardware':
+        log.log_info("PFC watchdog runs {}{}, nothing to do".format(
+            mechanism or "with no mode reported after {} s".format(MODE_WAIT_SECONDS), where(namespace)))
+        return None
+
+    entry = wait_for_state(state_db, 'DETECTION_TIME_MAX', time.monotonic() + RANGE_WAIT_SECONDS)
+    limits = hw_recovery_limits(entry)
+    if limits is not None and all(value is None for value in limits.values()):
+        limits = None
+    return config_db, limits
+
+
+def default_enabled(config_db):
+    status = config_db.get_entry('DEVICE_METADATA', 'localhost').get('default_pfcwd_status', '')
+    return status.lower() == 'enable'
+
+
+def no_common_value(limits):
+    """Return the timers for which no value is in both the hardware range and sonic-pfcwd.yang's."""
+    if limits is None:
+        return []
+    return sorted(field for field, (low, high) in configurable_limits(limits).items() if low > high)
+
+
+def rerun_start_default(namespaces, hw):
+    """Run 'pfcwd start_default' again if, in every namespace where the default PFC watchdog is
+    enabled, orchagent runs the hardware watchdog and PFC_WD is unchanged software-mode
+    start_default output. start_default configures every namespace at once and skips the ones
+    where the default is not enabled. Returns the exit status, 0 when it is not run."""
+    enabled = [ns for ns in namespaces if default_enabled(multi_asic.connect_config_db_for_ns(ns))]
+    if not enabled:
+        log.log_info("Default PFC watchdog not enabled, start_default not run")
+        return 0
+    if any(ns not in hw for ns in enabled):
+        log.log_info("Default PFC watchdog enabled where the watchdog does not run in hardware, "
+                     "start_default not run")
+        return 0
+
+    tables = {}
+    multipliers = {}
+    for ns in enabled:
+        config_db, limits = hw[ns]
+        fields = no_common_value(limits)
+        if fields:
+            # start_default would write a value sonic-pfcwd.yang rejects
+            log.log_info("No {} is in both the hardware range and sonic-pfcwd.yang's{}, "
+                         "start_default not run".format(', '.join(fields), where(ns)))
+            return 0
+        tables[ns] = config_db.get_table('PFC_WD')
+        # only a multiplier start_default can have used for this box's ports counts, and only
+        # the ports it configures, so a port stopped with 'pfcwd stop' stays stopped
+        multipliers[ns] = sw_default_multiplier(tables[ns], sw_default_multipliers(config_db),
+                                                start_default_pfc_ports(config_db))
+        if multipliers[ns] is None:
+            log.log_info("PFC_WD is not software-mode start_default output{}, start_default not run".format(
+                where(ns)))
+            return 0
+
+    proc = subprocess.run([PFCWD, 'start_default'], capture_output=True, text=True)
+    if proc.returncode != 0:
+        # exits 1 at the end, so the unit shows failed
+        log.log_error("'pfcwd start_default' failed ({}): {}".format(proc.returncode, proc.stderr.strip()))
+        return 1
+
+    for ns in enabled:
+        log.log_notice(
+            "Replaced software-mode PFC watchdog defaults on {} ports{} (detection and restoration {} ms, "
+            "POLL_INTERVAL {} ms) by running 'pfcwd start_default' for the hardware watchdog; "
+            "run 'config save' to keep them".format(
+                len(tables[ns]) - 1, where(ns), DEFAULT_DETECTION_TIME * multipliers[ns],
+                tables[ns]['GLOBAL']['POLL_INTERVAL']))
+    return 0
+
+
+def bring_into_range(namespace, config_db, limits):
+    """Step 2 for one hardware-watchdog namespace."""
+    if limits is None:
+        # orchagent does not check the range either; the software POLL_INTERVAL still goes
+        log.log_info("No PFC watchdog hardware timer range reported{}, timers left as they are".format(
+            where(namespace)))
+        remove_poll_interval(config_db)
+    else:
+        for field in no_common_value(limits):
+            log.log_warning("No PFC watchdog {} is in both the hardware range and sonic-pfcwd.yang's{}; "
+                            "{} left as configured".format(field, where(namespace), field))
+
+        before = config_db.get_table('PFC_WD')
+        updates = apply_hw_range(config_db, limits)
+        if not updates:
+            log.log_info("PFC watchdog timers{} are within the hardware range".format(where(namespace)))
+        for port, fields in sorted(updates.items()):
+            log.log_notice(
+                "PFC watchdog timers on {}{} outside the hardware range set to {} (were {}); "
+                "run 'config save' to keep them".format(
+                    port, where(namespace),
+                    ', '.join('{} {} ms'.format(f, v) for f, v in sorted(fields.items())),
+                    ', '.join('{} {} ms'.format(f, before[port].get(f)) for f in sorted(fields))))
+
+    remaining = config_db.get_entry('PFC_WD', 'GLOBAL')
+    if remaining:
+        log.log_warning("PFC_WD|GLOBAL{} ({}) is not applied by the hardware PFC watchdog".format(
+            where(namespace), ', '.join(sorted(remaining))))
+
+
+def main():
+    # needed to connect to a namespace's DBs on a multi-ASIC switch
+    load_db_config()
+    namespaces = multi_asic.get_namespace_list()
+    # one wait for all namespaces, so a multi-ASIC box waits no longer than a single-ASIC one
+    mode_deadline = time.monotonic() + MODE_WAIT_SECONDS
+    hw = {}
+    for namespace in namespaces:
+        result = hw_namespace(namespace, mode_deadline)
+        if result is not None:
+            hw[namespace] = result
+    if not hw:
+        return 0
+
+    # the timers are brought into range even if start_default fails
+    status = rerun_start_default(namespaces, hw)
+    for namespace, (config_db, limits) in hw.items():
+        bring_into_range(namespace, config_db, limits)
+    return status
+
+
+if __name__ == '__main__':
+    sys.exit(main())

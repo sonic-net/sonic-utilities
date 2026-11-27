@@ -42,6 +42,9 @@ DEFAULT_POLL_INTERVAL = 200
 DEFAULT_PORT_NUM = 32
 DEFAULT_ACTION = 'drop'
 DEFAULT_PFC_HISTORY_STATUS = "disable"
+# the timer ranges sonic-pfcwd.yang allows
+DETECTION_TIME_RANGE = (100, 5000)
+RESTORATION_TIME_RANGE = (100, 60000)
 
 STATS_DESCRIPTION = [
     ('STORM DETECTED/RESTORED', 'PFC_WD_QUEUE_STATS_DEADLOCK_DETECTED', 'PFC_WD_QUEUE_STATS_DEADLOCK_RESTORED'),
@@ -76,17 +79,20 @@ PORT_QOS_MAP =  "PORT_QOS_MAP"
 
 # (CONFIG_DB field, hardware limit name, range sonic-pfcwd.yang allows) of each hardware timer
 HW_TIMERS = (
-    ('detection_time', 'detection', (100, 5000)),
-    ('restoration_time', 'restoration', (100, 60000)),
+    ('detection_time', 'detection', DETECTION_TIME_RANGE),
+    ('restoration_time', 'restoration', RESTORATION_TIME_RANGE),
 )
 
 
 def configurable_limits(limits):
-    """Return {field: (min, max)} each hardware timer can be set to; timers without a usable range are left out."""
+    """Return {field: (min, max)} each hardware timer can be set to: the hardware range narrowed to
+    the one sonic-pfcwd.yang allows; min > max means no value is in both. A timer whose limits are
+    not reported, or whose maximum is 0 (orchagent then refuses every value), is left out and not
+    checked."""
     ranges = {}
     for field, name, (yang_low, yang_high) in HW_TIMERS:
         low, high = limits[name + '_min'], limits[name + '_max']
-        if low and high:
+        if low is not None and high:
             ranges[field] = (max(low, yang_low), min(high, yang_high))
     return ranges
 
@@ -146,6 +152,208 @@ def get_bp_ports(db):
            and candidates[port].get('role') == 'Int':
             bp_ports.append(port)
     return bp_ports
+
+
+def start_default_ports(config_db):
+    """Return the ports start_default configures: the neighbour and backplane ports."""
+    external_ports = list(config_db.get_table('DEVICE_NEIGHBOR').keys())
+    return natsorted(set(external_ports + get_bp_ports(config_db)))
+
+
+def count_pfc_enabled_ports(config_db, ports):
+    """Count the ports that PFC watchdog will actually be configured on.
+
+    verify_pfc_enable_status_per_port() skips any port that has no 'pfc_enable' in
+    PORT_QOS_MAP, so these are the ports that receive a PFC_WD entry and contribute
+    watchdog polling load. Counting every PORT entry instead would inflate the timers
+    on behalf of ports that never get a watchdog.
+
+    Args:
+        config_db (obj): CONFIG_DB connector.
+        ports (list): Candidate ports, i.e. the external and backplane ports.
+
+    Returns:
+        int: Number of the given ports that have PFC enabled.
+    """
+    port_qos_map = config_db.get_table(PORT_QOS_MAP)
+    return sum(
+        1 for port in ports
+        if port_qos_map.get(port, {}).get('pfc_enable') is not None
+    )
+
+
+def start_default_pfc_ports(config_db):
+    """Return the ports start_default writes a PFC_WD row for: start_default_ports() with PFC enabled."""
+    port_qos_map = config_db.get_table(PORT_QOS_MAP)
+    return [port for port in start_default_ports(config_db)
+            if port_qos_map.get(port, {}).get('pfc_enable') is not None]
+
+
+def default_multiplier(port_num):
+    """Return how much start_default scales the software watchdog's timers for port_num ports."""
+    return max(1, (port_num - 1) // DEFAULT_PORT_NUM + 1)
+
+
+def sw_default_multipliers(config_db):
+    """Return the multipliers software-mode start_default can have used for this config:
+    the one from the PFC-enabled ports it configures, and also the one from every PORT
+    entry, which older start_default used.
+    """
+    pfc_ports = len(start_default_pfc_ports(config_db))
+    return {default_multiplier(pfc_ports), default_multiplier(len(config_db.get_table('PORT')))}
+
+
+def sw_default_multiplier(table, multipliers, ports):
+    """Return the multiplier if `table` is exactly software-mode start_default output for
+    `ports`, otherwise None.
+
+    Args:
+        table (dict): The PFC_WD table, keyed by port name and "GLOBAL".
+        multipliers (set): The multipliers this box allows, from sw_default_multipliers().
+        ports (list): The ports start_default configures, from start_default_pfc_ports().
+    """
+    global_entry = table.get("GLOBAL", {})
+    if set(global_entry) != {'POLL_INTERVAL'}:
+        return None
+
+    if set(table) - {"GLOBAL"} != set(ports):
+        return None
+
+    port_entries = [entry for key, entry in table.items() if key != "GLOBAL"]
+    if not port_entries:
+        return None
+
+    port_fields = {'detection_time', 'restoration_time', 'action', 'pfc_stat_history'}
+    timers = set()
+    for entry in port_entries:
+        if not set(entry) <= port_fields or entry.get('action') != DEFAULT_ACTION:
+            return None
+        timers.add((entry.get('detection_time'), entry.get('restoration_time')))
+
+    if len(timers) != 1:
+        return None
+
+    try:
+        detection_time, restoration_time = (int(t) for t in timers.pop())
+    except (TypeError, ValueError):
+        return None
+
+    multiply = detection_time // DEFAULT_DETECTION_TIME
+    if multiply not in multipliers or detection_time != DEFAULT_DETECTION_TIME * multiply or \
+            restoration_time != DEFAULT_RESTORATION_TIME * multiply:
+        return None
+
+    # start_default did not always cap the poll interval
+    poll_interval = DEFAULT_POLL_INTERVAL * multiply
+    if global_entry['POLL_INTERVAL'] not in (str(min(poll_interval, MAX_POLL_INTERVAL_TIME)), str(poll_interval)):
+        return None
+
+    return multiply
+
+
+def hw_recovery_limits(entry):
+    """Return the hardware timer limits from a STATE_DB PFC_WD_STATE_TABLE|PFC_WD entry, each
+    None if not reported, or None unless the watchdog runs in hardware."""
+    if not entry or entry.get('RECOVERY_MECHANISM', '').upper() != 'HARDWARE':
+        return None
+
+    def limit(field):
+        try:
+            return int(entry[field])
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    return {
+        'detection_min': limit('DETECTION_TIME_MIN'),
+        'detection_max': limit('DETECTION_TIME_MAX'),
+        'restoration_min': limit('RESTORATION_TIME_MIN'),
+        'restoration_max': limit('RESTORATION_TIME_MAX'),
+    }
+
+
+def parse_timer(value):
+    """Return a PFC_WD timer as orchagent reads it (swss-common to_uint: stoul with base 0, so a
+    leading 0 is octal and 0x hex, and nothing may follow the number), or None where orchagent
+    would not read a number."""
+    if isinstance(value, bool):
+        return None
+    text = str(value).lstrip(" \t\n\v\f\r")
+    if text.startswith("+"):
+        text = text[1:]
+    if text[:2].lower() == "0x":
+        digits, base = text[2:], 16
+        valid = bool(digits) and all(c in "0123456789abcdefABCDEF" for c in digits)
+    elif len(text) > 1 and text[0] == "0":
+        digits, base = text, 8
+        valid = all(c in "01234567" for c in digits)
+    else:
+        digits, base = text, 10
+        valid = bool(digits) and all(c in "0123456789" for c in digits)
+    return int(digits, base) if valid else None
+
+
+def timers_outside_range(entry, ranges):
+    """Check the hardware timers of one PFC_WD port entry, read as orchagent reads them.
+
+    Return ({field: value} for each timer outside its range in ranges, as configurable_limits
+    returns them, and [field] for each timer orchagent would not read as a number). A timer
+    with no range is only checked for being a number.
+    """
+    outside, unreadable = {}, []
+    for field, _, _ in HW_TIMERS:
+        if field not in entry:
+            continue
+        value = parse_timer(entry[field])
+        if value is None:
+            unreadable.append(field)
+        elif field in ranges and not ranges[field][0] <= value <= ranges[field][1]:
+            outside[field] = value
+    return outside, unreadable
+
+
+def hw_range_updates(table, limits):
+    """Return {port: {field: value}} for every port timer of a PFC_WD table outside the
+    hardware limits, each set to the nearest value both the hardware and sonic-pfcwd.yang
+    allow, so 'config save' never stores a timer YANG validation rejects.
+
+    A timer configurable_limits() leaves out is not checked. Nor is a timer for which no value
+    is in both ranges, or a value that does not parse: those are left for orchagent to report.
+    """
+    ranges = {field: (low, high) for field, (low, high) in configurable_limits(limits).items() if low <= high}
+    updates = {}
+    for port, entry in table.items():
+        if port == "GLOBAL":
+            continue
+        outside, _ = timers_outside_range(entry, ranges)
+        for field, value in outside.items():
+            low, high = ranges[field]
+            updates.setdefault(port, {})[field] = low if value < low else high
+    return updates
+
+
+def remove_poll_interval(config_db):
+    """Remove a POLL_INTERVAL the software watchdog left in PFC_WD|GLOBAL; the hardware
+    watchdog does not use it. Returns whether there was one."""
+    global_entry = config_db.get_entry(CONFIG_DB_PFC_WD_TABLE_NAME, "GLOBAL")
+    if 'POLL_INTERVAL' not in global_entry:
+        return False
+
+    del global_entry['POLL_INTERVAL']
+    config_db.set_entry(CONFIG_DB_PFC_WD_TABLE_NAME, "GLOBAL", global_entry or None)
+    return True
+
+
+def apply_hw_range(config_db, limits):
+    """Make a PFC_WD table hold only what the hardware watchdog programs: port timers outside
+    the limits get the nearest bound, and a software POLL_INTERVAL is removed.
+
+    Each port is written once, so orchagent re-applies it once. Returns the per-port updates.
+    """
+    updates = hw_range_updates(config_db.get_table(CONFIG_DB_PFC_WD_TABLE_NAME), limits)
+    for port, fields in updates.items():
+        config_db.mod_entry(CONFIG_DB_PFC_WD_TABLE_NAME, port, fields)
+    remove_poll_interval(config_db)
+    return updates
 
 
 class PfcwdCli(object):
@@ -541,14 +749,16 @@ class PfcwdCli(object):
         if len(ports) == 0:
             ports = all_ports
 
+        # each port gets its own copy: with overwrite the callee fills in the port's own
+        # pfc_stat_history, which must not carry over to the next port
         for port in ports:
             if port == "all":
                 for p in all_ports:
-                    self.verify_pfc_enable_status_per_port(p, pfcwd_info, overwrite)
+                    self.verify_pfc_enable_status_per_port(p, dict(pfcwd_info), overwrite)
             else:
                 if port not in all_ports:
                     continue
-                self.verify_pfc_enable_status_per_port(port, pfcwd_info, overwrite)
+                self.verify_pfc_enable_status_per_port(port, dict(pfcwd_info), overwrite)
 
     @multi_asic_util.run_on_multi_asic
     def start_cmd(self, action, restoration_time, ports, detection_time, pfc_stat_history):
@@ -595,14 +805,15 @@ class PfcwdCli(object):
             pfcwd_info["pfc_stat_history"] = "enable"
 
         if hw_limits is not None:
-            for field, (low, high) in hw_ranges.items():
-                if not low <= pfcwd_info[field] <= high:
-                    click.echo(
-                        "Error: {} {}ms is outside hardware supported "
-                        "range [{}-{}]ms".format(field, pfcwd_info[field], low, high),
-                        err=True
-                    )
-                    sys.exit(1)
+            outside, _ = timers_outside_range(pfcwd_info, hw_ranges)
+            for field, value in outside.items():
+                low, high = hw_ranges[field]
+                click.echo(
+                    "Error: {} {}ms is outside hardware supported "
+                    "range [{}-{}]ms".format(field, value, low, high),
+                    err=True
+                )
+                sys.exit(1)
 
             # orchagent programs a port without an action as drop
             self.check_hw_action(action or DEFAULT_ACTION, ports)
@@ -695,22 +906,7 @@ class PfcwdCli(object):
 
     def get_hw_recovery_limits(self):
         """Return the hardware timer limits (None if unreported), or None outside hardware mode."""
-        entry = self.get_hw_state()
-        if entry is None:
-            return None
-
-        def limit(field):
-            try:
-                return int(entry[field])
-            except (KeyError, TypeError, ValueError):
-                return None
-
-        return {
-            'detection_min': limit('DETECTION_TIME_MIN'),
-            'detection_max': limit('DETECTION_TIME_MAX'),
-            'restoration_min': limit('RESTORATION_TIME_MIN'),
-            'restoration_max': limit('RESTORATION_TIME_MAX'),
-        }
+        return hw_recovery_limits(self.get_hw_state())
 
     def get_hw_global_action(self):
         """Return the hardware action, or None if unknown or not in hardware mode."""
@@ -828,26 +1024,6 @@ class PfcwdCli(object):
                 continue
             self.config_db.mod_entry(CONFIG_DB_PFC_WD_TABLE_NAME, port, None)
 
-    def count_pfc_enabled_ports(self, ports):
-        """Count the ports that PFC watchdog will actually be configured on.
-
-        verify_pfc_enable_status_per_port() skips any port that has no 'pfc_enable' in
-        PORT_QOS_MAP, so these are the ports that receive a PFC_WD entry and contribute
-        watchdog polling load. Counting every PORT entry instead would inflate the timers
-        on behalf of ports that never get a watchdog.
-
-        Args:
-            ports (list): Candidate ports, i.e. the external and backplane ports.
-
-        Returns:
-            int: Number of the given ports that have PFC enabled.
-        """
-        port_qos_map = self.config_db.get_table(PORT_QOS_MAP)
-        return sum(
-            1 for port in ports
-            if port_qos_map.get(port, {}).get('pfc_enable') is not None
-        )
-
     @multi_asic_util.run_on_multi_asic
     def start_default(self):
         if os.geteuid() != 0:
@@ -857,23 +1033,22 @@ class PfcwdCli(object):
         )
 
         # Get active ports from Config DB
-        external_ports = list(self.config_db.get_table('DEVICE_NEIGHBOR').keys())
-        bp_ports = get_bp_ports(self.config_db)
-
-        active_ports = natsorted(set(external_ports + bp_ports))
+        active_ports = start_default_ports(self.config_db)
 
         if not enable or enable.lower() != "enable":
             return
 
-        port_num = self.count_pfc_enabled_ports(active_ports)
+        port_num = count_pfc_enabled_ports(self.config_db, active_ports)
 
-        hw_mode = self.is_hw_mode()
+        # one STATE_DB read for the mode and the limits, which swss.sh deletes on every start
+        hw_limits = self.get_hw_recovery_limits()
+        hw_mode = hw_limits is not None
 
         # Hardware timers are per port, so they are not scaled by port count
         if hw_mode:
             self.check_hw_action(DEFAULT_ACTION, active_ports)
             # Move each default into the range the hardware supports
-            ranges = configurable_limits(self.get_hw_recovery_limits())
+            ranges = configurable_limits(hw_limits)
 
             def within_range(field, value):
                 low, high = ranges.get(field, (value, value))
@@ -883,22 +1058,22 @@ class PfcwdCli(object):
             restoration_time = within_range('restoration_time', DEFAULT_RESTORATION_TIME)
         else:
             # Parameter values positively correlate to the number of ports.
-            multiply = max(1, (port_num-1)//DEFAULT_PORT_NUM+1)
+            multiply = default_multiplier(port_num)
             detection_time = DEFAULT_DETECTION_TIME * multiply
             restoration_time = DEFAULT_RESTORATION_TIME * multiply
             poll_interval = DEFAULT_POLL_INTERVAL * multiply
             if poll_interval > MAX_POLL_INTERVAL_TIME:
                 poll_interval = MAX_POLL_INTERVAL_TIME
 
+        # pfc_stat_history is left out so each port keeps its own setting (default disable)
         pfcwd_info = {
             'detection_time': detection_time,
             'restoration_time': restoration_time,
             'action': DEFAULT_ACTION,
-            'pfc_stat_history': DEFAULT_PFC_HISTORY_STATUS
         }
 
         for port in active_ports:
-            self.verify_pfc_enable_status_per_port(port, pfcwd_info, overwrite=True)
+            self.verify_pfc_enable_status_per_port(port, dict(pfcwd_info), overwrite=True)
 
         # The hardware watchdog ignores PFC_WD|GLOBAL
         if not hw_mode:
@@ -908,12 +1083,7 @@ class PfcwdCli(object):
                 CONFIG_DB_PFC_WD_TABLE_NAME, "GLOBAL", pfcwd_info
             )
         else:
-            # Drop a polling interval left by the software watchdog
-            global_entry = self.config_db.get_entry(CONFIG_DB_PFC_WD_TABLE_NAME, "GLOBAL")
-            if global_entry.pop('POLL_INTERVAL', None) is not None:
-                self.config_db.set_entry(
-                    CONFIG_DB_PFC_WD_TABLE_NAME, "GLOBAL", global_entry or None
-                )
+            remove_poll_interval(self.config_db)
 
     @multi_asic_util.run_on_multi_asic
     def counter_poll(self, counter_poll):
@@ -1001,10 +1171,10 @@ class Start(object):
     @click.option(
         '--action', '-a', type=click.Choice(['drop', 'forward', 'alert'])
     )
-    @click.option('--restoration-time', '-r', type=click.IntRange(100, 60000))
+    @click.option('--restoration-time', '-r', type=click.IntRange(*RESTORATION_TIME_RANGE))
     @click.option('--pfc-stat-history', is_flag=True)
     @click.argument('ports', nargs=-1)
-    @click.argument('detection-time', type=click.IntRange(100, 5000))
+    @click.argument('detection-time', type=click.IntRange(*DETECTION_TIME_RANGE))
     @clicommon.pass_db
     def start(db, action, restoration_time, ports, detection_time, pfc_stat_history):
         """
