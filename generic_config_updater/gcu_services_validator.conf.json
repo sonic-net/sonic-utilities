@@ -31,9 +31,6 @@
         "PORT": {
             "services_to_validate": [ "port_service" ]
         },
-        "SYSLOG_SERVER":{
-            "services_to_validate": [ "rsyslog" ]
-        },
         "DHCP_RELAY": {
             "services_to_validate": [ "dhcp-relay" ]
         },
@@ -45,9 +42,6 @@
         },
         "ACL_RULE": {
             "services_to_validate": [ "caclmgrd-service" ]
-        },
-        "NTP_SERVER": {
-            "services_to_validate": [ "ntp-service" ]
         },
         "VLAN_INTERFACE": {
             "services_to_validate": [ "vlanintf-service" ]
@@ -63,9 +57,6 @@
         "port_service": {
             "validate_commands": [ "generic_config_updater.services_validator.port_speed_change_validator" ]
         },
-        "rsyslog": {
-            "validate_commands": [ "generic_config_updater.services_validator.rsyslog_validator" ]
-        },
         "dhcp-relay": {
             "validate_commands": [ "generic_config_updater.services_validator.dhcp_validator" ]
         },
@@ -74,9 +65,6 @@
         },
         "caclmgrd-service": {
             "validate_commands": [ "generic_config_updater.services_validator.caclmgrd_validator" ]
-        },
-        "ntp-service": {
-            "validate_commands": [ "generic_config_updater.services_validator.ntp_validator" ]
         },
         "vlanintf-service": {
             "validate_commands": [ "generic_config_updater.services_validator.vlanintf_validator" ]
