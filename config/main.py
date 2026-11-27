@@ -149,11 +149,9 @@ ADHOC_VALIDATION = True
 if os.environ.get("UTILITIES_UNIT_TESTING", "0") in ("1", "2"):
     temp_system_reload_lockfile = tempfile.NamedTemporaryFile()
     SYSTEM_RELOAD_LOCK = temp_system_reload_lockfile.name
-    temp_sampling_lockfile = tempfile.NamedTemporaryFile()
-    SAMPLING_CONFIG_LOCK = temp_sampling_lockfile.name
 else:
     SYSTEM_RELOAD_LOCK = "/etc/sonic/reload.lock"
-    SAMPLING_CONFIG_LOCK = "/etc/sonic/sampling.lock"
+SAMPLING_CONFIG_LOCK = port_mirror.SAMPLING_CONFIG_LOCK
 
 # Load sonic-cfggen from source since /usr/local/bin/sonic-cfggen does not have .py extension.
 sonic_cfggen = load_module_from_source('sonic_cfggen', '/usr/local/bin/sonic-cfggen')
@@ -3603,9 +3601,7 @@ def sample():
 def sample_add(ctx, session_name, port, direction, sample_rate, truncate_size, disabled):
     """Add sampled ERSPAN bindings for one or more source ports."""
     databases = port_mirror.config_databases()
-    for database in databases.values():
-        if 'global' in database.get_keys('SFLOW'):
-            ctx.fail(port_mirror.EXCLUSION_ERROR)
+    port_mirror.reject_sample_bindings_with_sflow_global(ctx, databases)
     sources = resolve_mirror_sample_sources(ctx, databases, port)
     directions = ['rx', 'tx'] if direction == 'both' else [direction]
     value = {'mirror_session': session_name, 'sample_rate': str(sample_rate),
@@ -3665,9 +3661,7 @@ def sample_remove(ctx, session_name, port, direction):
 def set_mirror_sample_admin_state(ctx, session_name, port, direction, admin_state):
     """Validate all selected bindings before updating only their admin_state."""
     databases = port_mirror.config_databases()
-    for database in databases.values():
-        if 'global' in database.get_keys('SFLOW'):
-            ctx.fail(port_mirror.EXCLUSION_ERROR)
+    port_mirror.reject_sample_bindings_with_sflow_global(ctx, databases)
     sources = resolve_mirror_sample_sources(ctx, databases, port, removing=admin_state == 'down')
     directions = ['rx', 'tx'] if direction == 'both' else [direction]
     grouped = {}

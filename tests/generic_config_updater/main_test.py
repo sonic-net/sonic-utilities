@@ -241,6 +241,55 @@ class TestValidatePatch(unittest.TestCase):
             with self.assertRaises(GenericConfigUpdaterError):
                 gcu_main.validate_patch([], json.dumps({}))
 
+    def test_sampling_conflict_rejected_without_yang(self):
+        config = {
+            "SFLOW": {"global": {"admin_state": "down"}},
+            "PORT_MIRROR_SAMPLE": {
+                "Ethernet0|rx": {
+                    "mirror_session": "export1",
+                    "admin_state": "down",
+                }
+            },
+        }
+
+        with mock.patch.dict('sys.modules', {'sonic_yang_cfg_generator': None}):
+            with self.assertRaisesRegex(GenericConfigUpdaterError, "cannot coexist"):
+                gcu_main.validate_patch([], json.dumps(config))
+
+    def test_sampling_atomic_switch_allowed_without_yang(self):
+        config = {"SFLOW": {"global": {"admin_state": "down"}}}
+        patch = [
+            {"op": "remove", "path": "/SFLOW"},
+            {
+                "op": "add",
+                "path": "/PORT_MIRROR_SAMPLE",
+                "value": {
+                    "Ethernet0|rx": {
+                        "mirror_session": "export1",
+                        "admin_state": "down",
+                    }
+                },
+            },
+        ]
+
+        with mock.patch.dict('sys.modules', {'sonic_yang_cfg_generator': None}):
+            self.assertTrue(gcu_main.validate_patch(patch, json.dumps(config)))
+
+    def test_multiasic_sampling_conflict_rejected_across_scopes(self):
+        config = {
+            "localhost": {"SFLOW": {"global": {}}},
+            "asic0": {},
+            "asic1": {
+                "PORT_MIRROR_SAMPLE": {
+                    "Ethernet0|rx": {"mirror_session": "export1"}
+                }
+            },
+        }
+
+        with mock.patch.dict('sys.modules', {'sonic_yang_cfg_generator': None}):
+            with self.assertRaisesRegex(GenericConfigUpdaterError, "cannot coexist"):
+                gcu_main.validate_patch([], json.dumps(config))
+
     def test_multiasic_validates_all_asics(self):
         mock_generator = mock.Mock()
         mock_generator.validate_config_db_json.return_value = True
@@ -351,6 +400,31 @@ class TestApplyPatchFromFile(unittest.TestCase):
                         '/fake/patch.json', 'CONFIGDB',
                         False, False, False, False, (), preprocess=False
                     )
+        mock_updater.apply_patch.assert_called_once()
+
+    def test_sampling_lock_covers_patch_application(self):
+        patch_ops = [{"op": "add", "path": "/TABLE/key", "value": "v"}]
+        mock_updater = mock.Mock()
+        sampling_lock = mock.MagicMock()
+        mock_updater.apply_patch.side_effect = lambda *args, **kwargs: (
+            self.assertTrue(sampling_lock.__enter__.called),
+            self.assertFalse(sampling_lock.__exit__.called),
+        )
+
+        with mock.patch('builtins.open', self._make_patch_file(patch_ops)):
+            with mock.patch('generic_config_updater.main.port_mirror.sampling_config_lock',
+                            return_value=sampling_lock):
+                with mock.patch('generic_config_updater.main.GenericUpdater',
+                                return_value=mock_updater):
+                    with mock.patch('generic_config_updater.main.extract_scope',
+                                    return_value=('', '/TABLE/key')):
+                        gcu_main.apply_patch_from_file(
+                            '/fake/patch.json', 'CONFIGDB',
+                            False, False, False, False, (), preprocess=False
+                        )
+
+        sampling_lock.__enter__.assert_called_once()
+        sampling_lock.__exit__.assert_called_once()
         mock_updater.apply_patch.assert_called_once()
 
     def test_preprocess_path_runs_helpers(self):

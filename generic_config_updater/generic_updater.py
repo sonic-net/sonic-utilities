@@ -13,6 +13,7 @@ from .patch_sorter import StrictPatchSorter, NonStrictPatchSorter, ConfigSplitte
                         TablesWithoutYangConfigSplitter, IgnorePathsFromYangConfigSplitter
 from .change_applier import ChangeApplier, DryRunChangeApplier
 from sonic_py_common import multi_asic
+from utilities_common import port_mirror
 
 CHECKPOINTS_DIR = "/etc/sonic/checkpoints"
 CHECKPOINT_EXT = ".cp.json"
@@ -341,12 +342,7 @@ class MultiASICConfigRollbacker(FileSystemConfigRollbacker):
         self.logger.log_notice(f"Loading checkpoint '{checkpoint_name}' into memory.")
         target_config = self.util.get_checkpoint_content(checkpoint_name)
         self.logger.log_notice(f"Replacing config '{checkpoint_name}' using 'Config Replacer'.")
-
-        for scope in self.scopelist:
-            config = target_config.pop(scope)
-            if scope.lower() == HOST_NAMESPACE:
-                scope = multi_asic.DEFAULT_NAMESPACE
-            ConfigReplacer(scope=scope).replace(config)
+        self.config_replacer.replace(target_config)
 
         self.logger.log_notice("Config rollbacking completed.")
 
@@ -462,6 +458,22 @@ class SonicYangDecorator(Decorator):
         Decorator.replace(self, config_db_target_config, trace_io=trace_io)
 
 
+class SamplingConfigValidatorDecorator(Decorator):
+    def replace(self, target_config, trace_io: Optional[IO] = None):
+        port_mirror.validate_sampling_config(target_config)
+        Decorator.replace(self, target_config, trace_io=trace_io)
+
+
+class SamplingConfigLockDecorator(Decorator):
+    def replace(self, target_config, trace_io: Optional[IO] = None):
+        with port_mirror.sampling_config_lock():
+            Decorator.replace(self, target_config, trace_io=trace_io)
+
+    def rollback(self, checkpoint_name):
+        with port_mirror.sampling_config_lock():
+            Decorator.rollback(self, checkpoint_name)
+
+
 class ConfigLockDecorator(Decorator):
     def __init__(self,
                  decorated_patch_applier=None,
@@ -490,8 +502,10 @@ class ConfigLockDecorator(Decorator):
 
     def execute_write_action(self, action, *args, **kwargs):
         self.config_lock.acquire_lock()
-        action(*args, **kwargs)
-        self.config_lock.release_lock()
+        try:
+            action(*args, **kwargs)
+        finally:
+            self.config_lock.release_lock()
 
 
 class GenericUpdateFactory:
@@ -558,6 +572,11 @@ class GenericUpdateFactory:
                                              config_wrapper=config_wrapper,
                                              scope=self.scope)
 
+        config_replacer = SamplingConfigValidatorDecorator(
+            decorated_config_replacer=config_replacer,
+            scope=self.scope,
+        )
+
         if config_format == ConfigFormat.CONFIGDB:
             pass
         elif config_format == ConfigFormat.SONICYANG:
@@ -570,6 +589,10 @@ class GenericUpdateFactory:
 
         if not dry_run:
             config_replacer = ConfigLockDecorator(decorated_config_replacer=config_replacer, scope=self.scope)
+            config_replacer = SamplingConfigLockDecorator(
+                decorated_config_replacer=config_replacer,
+                scope=self.scope,
+            )
 
         return config_replacer
 
@@ -597,8 +620,18 @@ class GenericUpdateFactory:
                                                            config_replacer=config_replacer,
                                                            scope=self.scope)
 
+        config_replacer = SamplingConfigValidatorDecorator(
+            decorated_config_replacer=config_replacer,
+            scope=self.scope,
+        )
+        config_rollbacker.config_replacer = config_replacer
+
         if not dry_run:
             config_rollbacker = ConfigLockDecorator(decorated_config_rollbacker=config_rollbacker, scope=self.scope)
+            config_rollbacker = SamplingConfigLockDecorator(
+                decorated_config_rollbacker=config_rollbacker,
+                scope=self.scope,
+            )
 
         return config_rollbacker
 

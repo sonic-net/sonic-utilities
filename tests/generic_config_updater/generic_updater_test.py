@@ -398,6 +398,31 @@ class TestFileSystemConfigRollbacker(unittest.TestCase):
                                              config_replacer=replacer,
                                              config_wrapper=config_wrapper)
 
+
+class TestMultiASICConfigRollbacker(unittest.TestCase):
+    def test_rollback_replaces_complete_checkpoint_once(self):
+        target_config = {
+            gu.HOST_NAMESPACE: {"DEVICE_METADATA": {"localhost": {}}},
+            "asic0": {"PORT": {"Ethernet0": {}}},
+        }
+        config_replacer = Mock()
+
+        with patch.object(gu.multi_asic, 'get_namespace_list',
+                          return_value=['asic0']):
+            rollbacker = gu.MultiASICConfigRollbacker(
+                config_replacer=config_replacer,
+                config_wrapper=Mock(),
+            )
+
+        rollbacker.util = Mock()
+        rollbacker.util.check_checkpoint_exists.return_value = True
+        rollbacker.util.get_checkpoint_content.return_value = target_config
+
+        rollbacker.rollback('checkpoint')
+
+        config_replacer.replace.assert_called_once_with(target_config)
+
+
 class TestGenericUpdateFactory(unittest.TestCase):
     def setUp(self):
         self.any_verbose=True
@@ -453,7 +478,15 @@ class TestGenericUpdateFactory(unittest.TestCase):
         # Arrange
         options = [
             {"verbose": {True: None, False: None}},
-            {"dry_run": {True: None, False: gu.ConfigLockDecorator}},
+            {
+                "dry_run": {
+                    True: None,
+                    False: (
+                        gu.SamplingConfigLockDecorator,
+                        gu.ConfigLockDecorator,
+                    ),
+                }
+            },
             {
                 "config_format": {
                     gu.ConfigFormat.SONICYANG: gu.SonicYangDecorator,
@@ -471,7 +504,15 @@ class TestGenericUpdateFactory(unittest.TestCase):
         # Arrange
         options = [
             {"verbose": {True: None, False: None}},
-            {"dry_run": {True: None, False: gu.ConfigLockDecorator}},
+            {
+                "dry_run": {
+                    True: None,
+                    False: (
+                        gu.SamplingConfigLockDecorator,
+                        gu.ConfigLockDecorator,
+                    ),
+                }
+            },
             {"ignore_non_yang_tables": {True: None, False: None}},
             {"ignore_paths": {(): None, ("", "/ACL_TABLE"): None}},
         ]
@@ -488,10 +529,11 @@ class TestGenericUpdateFactory(unittest.TestCase):
         for key in options[cur_option][param]:
             params[param] = key
             decorator = options[cur_option][param][key]
-            if decorator != None:
-                expected_decorators.append(decorator)
+            decorators = decorator if isinstance(decorator, tuple) else (decorator,)
+            decorators = tuple(item for item in decorators if item is not None)
+            expected_decorators.extend(decorators)
             self.recursively_test_create_func(options, cur_option+1, params, expected_decorators, create_func)
-            if decorator != None:
+            for _ in decorators:
                 expected_decorators.pop()
 
     def validate_create_patch_applier(self, params, expected_decorators):
@@ -539,6 +581,8 @@ class TestGenericUpdateFactory(unittest.TestCase):
 
             config_replacer = config_replacer.decorated_config_replacer
 
+        self.assertIsInstance(config_replacer, gu.SamplingConfigValidatorDecorator)
+        config_replacer = config_replacer.decorated_config_replacer
         self.assertIsInstance(config_replacer, gu.ConfigReplacer)
         if params["dry_run"]:
             self.assertIsInstance(config_replacer.config_wrapper, gu.DryRunConfigWrapper)
@@ -572,33 +616,38 @@ class TestGenericUpdateFactory(unittest.TestCase):
             config_rollbacker = config_rollbacker.decorated_config_rollbacker
 
         self.assertIsInstance(config_rollbacker, gu.FileSystemConfigRollbacker)
+        self.assertIsInstance(
+            config_rollbacker.config_replacer,
+            gu.SamplingConfigValidatorDecorator,
+        )
+        config_replacer = config_rollbacker.config_replacer.decorated_config_replacer
         if params["dry_run"]:
             self.assertIsInstance(config_rollbacker.config_wrapper, gu.DryRunConfigWrapper)
-            self.assertIsInstance(config_rollbacker.config_replacer.config_wrapper, gu.DryRunConfigWrapper)
+            self.assertIsInstance(config_replacer.config_wrapper, gu.DryRunConfigWrapper)
             self.assertIsInstance(
-                config_rollbacker.config_replacer.patch_applier.config_wrapper, gu.DryRunConfigWrapper)
-            self.assertIsInstance(config_rollbacker.config_replacer.patch_applier.changeapplier, ca.DryRunChangeApplier)
+                config_replacer.patch_applier.config_wrapper, gu.DryRunConfigWrapper)
+            self.assertIsInstance(config_replacer.patch_applier.changeapplier, ca.DryRunChangeApplier)
             self.assertIsInstance(
-                config_rollbacker.config_replacer.patch_applier.changeapplier.config_wrapper, gu.DryRunConfigWrapper)
+                config_replacer.patch_applier.changeapplier.config_wrapper, gu.DryRunConfigWrapper)
         else:
             self.assertIsInstance(config_rollbacker.config_wrapper, gu.ConfigWrapper)
-            self.assertIsInstance(config_rollbacker.config_replacer.config_wrapper, gu.ConfigWrapper)
+            self.assertIsInstance(config_replacer.config_wrapper, gu.ConfigWrapper)
             self.assertIsInstance(
-                config_rollbacker.config_replacer.patch_applier.config_wrapper, gu.ConfigWrapper)
-            self.assertIsInstance(config_rollbacker.config_replacer.patch_applier.changeapplier, ca.ChangeApplier)
+                config_replacer.patch_applier.config_wrapper, gu.ConfigWrapper)
+            self.assertIsInstance(config_replacer.patch_applier.changeapplier, ca.ChangeApplier)
 
         if params["ignore_non_yang_tables"] or params["ignore_paths"]:
-            self.assertIsInstance(config_rollbacker.config_replacer.patch_applier.patchsorter, ps.NonStrictPatchSorter)
+            self.assertIsInstance(config_replacer.patch_applier.patchsorter, ps.NonStrictPatchSorter)
             expected_config_splitters = []
             if params["ignore_non_yang_tables"]:
                 expected_config_splitters.append(ps.TablesWithoutYangConfigSplitter.__name__)
             if params["ignore_paths"]:
                 expected_config_splitters.append(ps.IgnorePathsFromYangConfigSplitter.__name__)
             actual_config_splitters = [type(splitter).__name__ for splitter in
-                    config_rollbacker.config_replacer.patch_applier.patchsorter.config_splitter.inner_config_splitters]
+                    config_replacer.patch_applier.patchsorter.config_splitter.inner_config_splitters]
             self.assertCountEqual(expected_config_splitters, actual_config_splitters)
         else:
-            self.assertIsInstance(config_rollbacker.config_replacer.patch_applier.patchsorter, ps.StrictPatchSorter)
+            self.assertIsInstance(config_replacer.patch_applier.patchsorter, ps.StrictPatchSorter)
 
 class TestGenericUpdater(unittest.TestCase):
     def setUp(self):
@@ -882,6 +931,67 @@ class TestSonicYangDecorator(unittest.TestCase):
                                     patch_wrapper=patch_wrapper,
                                     config_wrapper=config_wrapper)
 
+
+class TestSamplingConfigValidatorDecorator(unittest.TestCase):
+    def test_replace_validates_before_writing(self):
+        config_replacer = Mock()
+        decorator = gu.SamplingConfigValidatorDecorator(
+            decorated_config_replacer=config_replacer)
+
+        with patch.object(gu.port_mirror, 'validate_sampling_config') as validate:
+            decorator.replace(Files.CONFIG_DB_AS_JSON)
+
+        validate.assert_called_once_with(Files.CONFIG_DB_AS_JSON)
+        config_replacer.replace.assert_called_once_with(
+            Files.CONFIG_DB_AS_JSON, trace_io=None)
+
+    def test_replace_conflict_blocks_writes(self):
+        config_replacer = Mock()
+        decorator = gu.SamplingConfigValidatorDecorator(
+            decorated_config_replacer=config_replacer)
+
+        with patch.object(
+                gu.port_mirror, 'validate_sampling_config',
+                side_effect=ValueError(gu.port_mirror.EXCLUSION_ERROR)):
+            with self.assertRaises(ValueError):
+                decorator.replace(Files.CONFIG_DB_AS_JSON)
+
+        config_replacer.replace.assert_not_called()
+
+
+class TestSamplingConfigLockDecorator(unittest.TestCase):
+    def test_replace_holds_sampling_lock(self):
+        config_replacer = Mock()
+        decorator = gu.SamplingConfigLockDecorator(
+            decorated_config_replacer=config_replacer)
+        sampling_lock = MagicMock()
+
+        with patch.object(
+                gu.port_mirror, 'sampling_config_lock',
+                return_value=sampling_lock):
+            decorator.replace(Files.CONFIG_DB_AS_JSON)
+
+        sampling_lock.__enter__.assert_called_once()
+        sampling_lock.__exit__.assert_called_once()
+        config_replacer.replace.assert_called_once_with(
+            Files.CONFIG_DB_AS_JSON, trace_io=None)
+
+    def test_rollback_holds_sampling_lock(self):
+        config_rollbacker = Mock()
+        decorator = gu.SamplingConfigLockDecorator(
+            decorated_config_rollbacker=config_rollbacker)
+        sampling_lock = MagicMock()
+
+        with patch.object(
+                gu.port_mirror, 'sampling_config_lock',
+                return_value=sampling_lock):
+            decorator.rollback('checkpoint')
+
+        sampling_lock.__enter__.assert_called_once()
+        sampling_lock.__exit__.assert_called_once()
+        config_rollbacker.rollback.assert_called_once_with('checkpoint')
+
+
 class TestConfigLockDecorator(unittest.TestCase):
     def setUp(self):
         self.any_checkpoint_name = "anycheckpoint"
@@ -936,6 +1046,15 @@ class TestConfigLockDecorator(unittest.TestCase):
         # Assert
         config_lock_decorator.config_lock.acquire_lock.assert_called_once()
         config_lock_decorator.decorated_config_rollbacker.checkpoint.assert_has_calls([call(self.any_checkpoint_name)])
+        config_lock_decorator.config_lock.release_lock.assert_called_once()
+
+    def test_replace__failure_releases_config_lock(self):
+        config_lock_decorator = self.__create_config_lock_decorator()
+        config_lock_decorator.decorated_config_replacer.replace.side_effect = ValueError
+
+        with self.assertRaises(ValueError):
+            config_lock_decorator.replace(Files.SONIC_YANG_AS_JSON)
+
         config_lock_decorator.config_lock.release_lock.assert_called_once()
 
     def __create_config_lock_decorator(self):
