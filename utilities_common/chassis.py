@@ -1,6 +1,7 @@
 import os
 from sonic_py_common import device_info
 
+
 def get_chassis_local_interfaces():
     lst = []
     platform = device_info.get_platform()

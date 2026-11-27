@@ -64,9 +64,9 @@ def get_config_db_as_json(scope=None):
 
 def get_config_db_as_text(scope=None):
     if scope is not None and scope != multi_asic.DEFAULT_NAMESPACE:
-        cmd = ['sonic-cfggen', '-d', '--print-data', '-n', scope]
+        cmd = ['sonic-cfggen', '-d', '--redis-unix-socket', '--print-data', '-n', scope]
     else:
-        cmd = ['sonic-cfggen', '-d', '--print-data']
+        cmd = ['sonic-cfggen', '-d', '--redis-unix-socket', '--print-data']
     result = subprocess.Popen(cmd, shell=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     text, err = result.communicate()
     return_code = result.returncode

@@ -248,23 +248,23 @@ Released lock on {0}
 """
 
 save_config_output = """\
-Running command: /usr/local/bin/sonic-cfggen -d --print-data > /etc/sonic/config_db.json
+Running command: /usr/local/bin/sonic-cfggen -d --redis-unix-socket --print-data > /etc/sonic/config_db.json
 """
 
 save_config_filename_output = """\
-Running command: /usr/local/bin/sonic-cfggen -d --print-data > /tmp/config_db.json
+Running command: /usr/local/bin/sonic-cfggen -d --redis-unix-socket --print-data > /tmp/config_db.json
 """
 
 save_config_masic_output = """\
-Running command: /usr/local/bin/sonic-cfggen -d --print-data > /etc/sonic/config_db.json
-Running command: /usr/local/bin/sonic-cfggen -n asic0 -d --print-data > /etc/sonic/config_db0.json
-Running command: /usr/local/bin/sonic-cfggen -n asic1 -d --print-data > /etc/sonic/config_db1.json
+Running command: /usr/local/bin/sonic-cfggen -d --redis-unix-socket --print-data > /etc/sonic/config_db.json
+Running command: /usr/local/bin/sonic-cfggen -n asic0 -d --redis-unix-socket --print-data > /etc/sonic/config_db0.json
+Running command: /usr/local/bin/sonic-cfggen -n asic1 -d --redis-unix-socket --print-data > /etc/sonic/config_db1.json
 """
 
 save_config_filename_masic_output = """\
-Running command: /usr/local/bin/sonic-cfggen -d --print-data > config_db.json
-Running command: /usr/local/bin/sonic-cfggen -n asic0 -d --print-data > config_db0.json
-Running command: /usr/local/bin/sonic-cfggen -n asic1 -d --print-data > config_db1.json
+Running command: /usr/local/bin/sonic-cfggen -d --redis-unix-socket --print-data > config_db.json
+Running command: /usr/local/bin/sonic-cfggen -n asic0 -d --redis-unix-socket --print-data > config_db0.json
+Running command: /usr/local/bin/sonic-cfggen -n asic1 -d --redis-unix-socket --print-data > config_db1.json
 """
 
 save_config_onefile_masic_output = """\

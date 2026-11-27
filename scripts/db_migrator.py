@@ -69,27 +69,27 @@ class DBMigrator():
         # Generate config_src_data from minigraph and golden config
         self.generate_config_src(namespace)
 
-        db_kwargs = {}
+        db_kwargs = {'use_unix_socket_path': True, 'authenticate': True}
         if socket:
             db_kwargs['unix_socket_path'] = socket
 
         if namespace is None:
             self.configDB = ConfigDBConnector(**db_kwargs)
         else:
-            self.configDB = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace, **db_kwargs)
+            self.configDB = ConfigDBConnector(namespace=namespace, **db_kwargs)
         self.configDB.db_connect('CONFIG_DB')
 
         if namespace is None:
             self.appDB = ConfigDBConnector(**db_kwargs)
         else:
-            self.appDB = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace, **db_kwargs)
+            self.appDB = ConfigDBConnector(namespace=namespace, **db_kwargs)
         self.appDB.db_connect('APPL_DB')
 
-        self.stateDB = SonicV2Connector(host='127.0.0.1')
+        self.stateDB = SonicV2Connector(use_unix_socket_path=True, authenticate=True, host='127.0.0.1')
         if self.stateDB is not None:
             self.stateDB.connect(self.stateDB.STATE_DB)
 
-        self.loglevelDB = SonicV2Connector(host='127.0.0.1')
+        self.loglevelDB = SonicV2Connector(use_unix_socket_path=True, authenticate=True, host='127.0.0.1')
         if self.loglevelDB is not None:
             self.loglevelDB.connect(self.loglevelDB.LOGLEVEL_DB)
 
@@ -207,7 +207,7 @@ class DBMigrator():
         During warm-reboot, add back two 10G management ports which got removed from 6100
         to ensure no change in bcm.config from older image
         '''
-        if device_info.is_warm_restart_enabled('swss') == False:
+        if device_info.is_warm_restart_enabled('swss', use_tcp=False) == False:
             log.log_notice("Skip migration on {}, warm-reboot flag not set".format(self.hwsku))
             return True
 

@@ -178,7 +178,7 @@ def pcie_aer_display(ctx, severity):
     pcie_dev_list = list()
     dev_found = False
 
-    statedb = SonicV2Connector()
+    statedb = SonicV2Connector(use_unix_socket_path=True)
     statedb.connect(statedb.STATE_DB)
 
     table = OrderedDict()

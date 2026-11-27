@@ -1,3 +1,4 @@
+from utilities_common.redis_transport import cli_uses_unix_socket
 import datetime
 import time
 import re
@@ -246,7 +247,7 @@ class Portstat(object):
         self.db.delete_all_by_pattern(self.db.CHASSIS_STATE_DB, LINECARD_PORT_STAT_MARK_TABLE + "*")
 
         # Check how many linecards are connected
-        tempdb = SonicV2Connector(use_unix_socket_path=False)
+        tempdb = SonicV2Connector(use_unix_socket_path=cli_uses_unix_socket())
         tempdb.connect(tempdb.STATE_DB, False)
         linecard_midplane_keys = tempdb.keys(tempdb.STATE_DB, CHASSIS_MIDPLANE_INFO_TABLE + "*")
         lc_count = 0
@@ -436,7 +437,7 @@ class Portstat(object):
 
     def get_db_client(self, ns):
         if not self.db_clients.get(ns):
-            self.db_clients[ns] = multi_asic.connect_to_all_dbs_for_ns(ns)
+            self.db_clients[ns] = multi_asic.connect_to_all_dbs_for_ns(ns, use_tcp=not cli_uses_unix_socket())
         return self.db_clients[ns]
 
     def print_fec_hist_vertical(self, cnstat_new_dict, cnstat_old_dict, intf):

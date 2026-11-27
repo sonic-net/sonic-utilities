@@ -569,23 +569,33 @@ class TestShowAcl(object):
     def setup_method(self):
         print('SETUP')
 
+    @pytest.mark.parametrize('uid,prefix', [
+        (0, ['acl-loader']),
+        (1000, ['/usr/bin/sudo', '-n', '/usr/local/bin/acl-loader']),
+    ])
     @patch('utilities_common.cli.run_command')
-    def test_rule(self, mock_run_command):
+    def test_rule(self, mock_run_command, uid, prefix, monkeypatch):
+        monkeypatch.setattr('os.geteuid', lambda: uid)
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['acl'].commands['rule'], ['SNMP_ACL', 'RULE_1', '--verbose'])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['acl-loader', 'show', 'rule', 'SNMP_ACL', 'RULE_1'], display_cmd=True)
+        mock_run_command.assert_called_once_with(prefix + ['show', 'rule', '--', 'SNMP_ACL', 'RULE_1'], display_cmd=True)
 
+    @pytest.mark.parametrize('uid,prefix', [
+        (0, ['acl-loader']),
+        (1000, ['/usr/bin/sudo', '-n', '/usr/local/bin/acl-loader']),
+    ])
     @patch('utilities_common.cli.run_command')
-    def test_table(self, mock_run_command):
+    def test_table(self, mock_run_command, uid, prefix, monkeypatch):
+        monkeypatch.setattr('os.geteuid', lambda: uid)
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['acl'].commands['table'], ['EVERFLOW', '--verbose'])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['acl-loader', 'show', 'table', 'EVERFLOW'], display_cmd=True)
+        mock_run_command.assert_called_once_with(prefix + ['show', 'table', '--', 'EVERFLOW'], display_cmd=True)
 
     def teardown_method(self):
         print('TEAR DOWN')

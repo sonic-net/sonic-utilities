@@ -1,6 +1,7 @@
 from collections import OrderedDict
 import click
 import utilities_common.cli as clicommon
+from utilities_common.redis_transport import cli_uses_unix_socket
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from tabulate import tabulate
 
@@ -44,9 +45,9 @@ def active_hops(nhg_or_vrf, prefix):
     show fgnhg active-hops <nhg>                 - filter by NHG name
     show fgnhg active-hops <vrf> <prefix>        - filter by VRF/VNET and prefix
     """
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=cli_uses_unix_socket())
     config_db.connect()
-    state_db = SonicV2Connector(host='127.0.0.1')
+    state_db = SonicV2Connector(use_unix_socket_path=cli_uses_unix_socket(), host='127.0.0.1')
     state_db.connect(state_db.STATE_DB, False)  # Make one attempt only STATE_DB
     TABLE_NAME_SEPARATOR = '|'
     fg_prefix = 'FG_ROUTE_TABLE' + TABLE_NAME_SEPARATOR
@@ -141,9 +142,9 @@ def hash_view(nhg_or_vrf, prefix):
     show fgnhg hash-view <nhg>                   - filter by NHG name
     show fgnhg hash-view <vrf> <prefix>          - filter by VRF/VNET and prefix
     """
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=cli_uses_unix_socket())
     config_db.connect()
-    state_db = SonicV2Connector(host='127.0.0.1')
+    state_db = SonicV2Connector(use_unix_socket_path=cli_uses_unix_socket(), host='127.0.0.1')
     state_db.connect(state_db.STATE_DB, False)  # Make one attempt only STATE_DB
     TABLE_NAME_SEPARATOR = '|'
     fg_prefix = 'FG_ROUTE_TABLE' + TABLE_NAME_SEPARATOR

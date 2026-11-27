@@ -55,7 +55,7 @@ def get_config_json():
     if multi_asic.is_multi_asic():
         scope_list.extend(multi_asic.get_namespace_list())
     for scope in scope_list:
-        command = ["sonic-cfggen", "-d", "--print-data"]
+        command = ["sonic-cfggen", "-d", "--redis-unix-socket", "--print-data"]
         if scope != multi_asic.DEFAULT_NAMESPACE:
             command += ["-n", scope]
 

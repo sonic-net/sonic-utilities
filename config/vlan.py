@@ -1,3 +1,4 @@
+from utilities_common.redis_transport import cli_uses_unix_socket
 import click
 import utilities_common.cli as clicommon
 import utilities_common.dhcp_relay_util as dhcp_relay_util
@@ -56,7 +57,7 @@ def get_config_db_from_context(ctx):
         return ctx.obj.cfgdb
 
     # Fallback: connect to database for namespace
-    return multi_asic.connect_config_db_for_ns(namespace)
+    return multi_asic.connect_config_db_for_ns(namespace, use_tcp=False, authenticate=True)
 
 
 def get_namespace_from_context(ctx):
@@ -87,7 +88,7 @@ def get_db_with_namespace(ctx):
         ns_db = ctx.obj.db
     else:
         namespace = get_namespace_from_context(ctx)
-        ns_db = multi_asic.connect_to_all_dbs_for_ns(namespace)
+        ns_db = multi_asic.connect_to_all_dbs_for_ns(namespace, use_tcp=not cli_uses_unix_socket())
 
     return ConfigDbWrapper(config_db, ns_db)
 
@@ -274,7 +275,7 @@ def del_vlan(ctx, vid, multiple, no_restart_dhcp_relay):
 def restart_ndppd():
     verify_swss_running_cmd = ['docker', 'container', 'inspect', '-f', '{{.State.Status}}', 'swss']
     docker_exec_cmd = ['docker', 'exec', '-i', 'swss']
-    ndppd_config_gen_cmd = ['sonic-cfggen', '-d', '-t', '/usr/share/sonic/templates/ndppd.conf.j2,/etc/ndppd.conf']
+    ndppd_config_gen_cmd = ['sonic-cfggen', '-d', '--redis-unix-socket', '-t', '/usr/share/sonic/templates/ndppd.conf.j2,/etc/ndppd.conf']
     ndppd_restart_cmd = ['supervisorctl', 'restart', 'ndppd']
     ndppd_status_cmd = ["supervisorctl", "status", "ndppd"]
     ndppd_conf_copy_cmd = ['cp', '/usr/share/sonic/templates/ndppd.conf', '/etc/supervisor/conf.d/']

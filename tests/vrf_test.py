@@ -331,7 +331,7 @@ Error: 'vrf_name' length should not exceed 15 characters
         runner = CliRunner()
         result = runner.invoke(config.config.commands["vrf"], ['add', 'Vrf200'])
         assert result.exit_code == 0
-        mock_cdb.assert_called_once_with(use_unix_socket_path=True, namespace='')
+        mock_cdb.assert_called_once_with(use_unix_socket_path=True, namespace='', authenticate=True)
         mock_db_instance.connect.assert_called_once()
 
 

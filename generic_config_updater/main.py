@@ -410,14 +410,14 @@ def multiasic_save_to_singlefile(filename):
     all_configs = {}
 
     # Get host configuration
-    cmd = ["sonic-cfggen", "-d", "--print-data"]
+    cmd = ["sonic-cfggen", "-d", "--redis-unix-socket", "--print-data"]
     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
     host_config = json.loads(result.stdout)
     all_configs['localhost'] = host_config
 
     # Get each ASIC configuration
     for namespace in multi_asic.get_namespace_list():
-        cmd = ["sonic-cfggen", "-d", "--print-data", "-n", namespace]
+        cmd = ["sonic-cfggen", "-d", "--redis-unix-socket", "--print-data", "-n", namespace]
         result = subprocess.run(
             cmd, capture_output=True, text=True, check=True
         )
@@ -575,7 +575,7 @@ def save_config(args):
         if multi_asic.is_multi_asic():
             multiasic_save_to_singlefile(filename)
         else:
-            cmd = ["sonic-cfggen", "-d", "--print-data"]
+            cmd = ["sonic-cfggen", "-d", "--redis-unix-socket", "--print-data"]
             result = subprocess.run(
                 cmd, capture_output=True, text=True, check=True
             )

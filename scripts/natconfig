@@ -42,6 +42,7 @@ import argparse
 import sys
 
 from tabulate import tabulate
+from utilities_common.redis_transport import cli_uses_unix_socket
 from swsscommon.swsscommon import ConfigDBConnector
 
 
@@ -49,7 +50,7 @@ class NatConfig(object):
 
     def __init__(self):
         super(NatConfig,self).__init__()
-        self.config_db = ConfigDBConnector()
+        self.config_db = ConfigDBConnector(use_unix_socket_path=cli_uses_unix_socket())
         self.config_db.connect()
         return
 

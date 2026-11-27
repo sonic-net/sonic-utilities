@@ -83,7 +83,7 @@ def print_message(lvl, *args):
 def check_vnet_cfg():
     ''' Returns True if VNET is configured in APP_DB or False if no VNET configuration.
     '''
-    db = swsscommon.DBConnector('APPL_DB', 0, True)
+    db = swsscommon.DBConnector('APPL_DB', 0, False)
 
     vnet_db_keys = swsscommon.Table(db, 'VNET_TABLE').getKeys()
 
@@ -94,7 +94,7 @@ def get_vnet_intfs():
     ''' Returns dictionary of VNETs and related VNET interfaces.
     Format: { <vnet_name>: [ <vnet_rif_name> ] }
     '''
-    db = swsscommon.DBConnector('APPL_DB', 0, True)
+    db = swsscommon.DBConnector('APPL_DB', 0, False)
 
     intfs_table = swsscommon.Table(db, 'INTF_TABLE')
     intfs_keys = swsscommon.Table(db, 'INTF_TABLE').getKeys()
@@ -118,7 +118,7 @@ def get_all_rifs_oids():
     ''' Returns dictionary of all router interfaces and their OIDs.
     Format: { <rif_name>: <rif_oid> }
     '''
-    db = swsscommon.DBConnector('COUNTERS_DB', 0, True)
+    db = swsscommon.DBConnector('COUNTERS_DB', 0, False)
     rif_table = swsscommon.Table(db, 'COUNTERS_RIF_NAME_MAP')
 
     rif_name_oid_map = dict(rif_table.get('')[1])
@@ -149,7 +149,7 @@ def get_vrf_entries():
     ''' Returns dictionary of VNET interfaces and corresponding VRF OIDs.
     Format: { <vnet_rif_name>: <vrf_oid> }
     '''
-    db = swsscommon.DBConnector('ASIC_DB', 0, True)
+    db = swsscommon.DBConnector('ASIC_DB', 0, False)
     rif_table = swsscommon.Table(db, 'ASIC_STATE')
 
     vnet_rifs_oids = get_vnet_rifs_oids()
@@ -171,7 +171,7 @@ def filter_out_vnet_ip2me_routes(vnet_routes):
     ''' Filters out IP2ME routes from the provided dictionary with VNET routes
     Format: { <vnet_name>: { 'routes': [ <pfx/pfx_len> ], 'vrf_oid': <oid> } }
     '''
-    db = swsscommon.DBConnector('APPL_DB', 0, True)
+    db = swsscommon.DBConnector('APPL_DB', 0, False)
 
     all_rifs_db_keys = swsscommon.Table(db, 'INTF_TABLE').getKeys()
     vnet_intfs = get_vnet_intfs()
@@ -208,7 +208,7 @@ def get_vnet_routes_from_app_db():
     ''' Returns dictionary of VNET routes configured per each VNET in APP_DB.
     Format: { <vnet_name>: { 'routes': [ <pfx/pfx_len> ], 'vrf_oid': <oid> } }
     '''
-    db = swsscommon.DBConnector('APPL_DB', 0, True)
+    db = swsscommon.DBConnector('APPL_DB', 0, False)
 
     vnet_intfs = get_vnet_intfs()
     vnet_vrfs = get_vrf_entries()
@@ -255,7 +255,7 @@ def get_vnet_routes_from_asic_db():
     ''' Returns dictionary of VNET routes configured per each VNET in ASIC_DB.
     Format: { <vnet_name>: { 'routes': [ <pfx/pfx_len> ], 'vrf_oid': <oid> } }
     '''
-    db = swsscommon.DBConnector('ASIC_DB', 0, True)
+    db = swsscommon.DBConnector('ASIC_DB', 0, False)
 
     tbl = swsscommon.Table(db, 'ASIC_STATE')
 
@@ -372,7 +372,7 @@ def filter_active_vnet_routes(vnet_routes: dict):
     Format (for both input and output):
     { <vnet_name>: { 'routes': [ <pfx/pfx_len> ], 'vrf_oid': <oid> } }
     """
-    state_db = swsscommon.DBConnector("STATE_DB", 0, True)
+    state_db = swsscommon.DBConnector("STATE_DB", 0, False)
     vnet_route_tunnel_table = swsscommon.Table(state_db, "VNET_ROUTE_TUNNEL_TABLE")
 
     vnet_active_routes = {}
@@ -406,7 +406,7 @@ def main():
     # Don't run VNET routes consistency logic if there is no VNET configuration
     if not check_vnet_cfg():
         return rc
-    asic_db = swsscommon.DBConnector('ASIC_DB', 0, True)
+    asic_db = swsscommon.DBConnector('ASIC_DB', 0, False)
     virtual_router = swsscommon.Table(asic_db, 'ASIC_STATE:SAI_OBJECT_TYPE_VIRTUAL_ROUTER')
     global default_vrf_oid
     default_vrf_oid = ""

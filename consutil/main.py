@@ -24,6 +24,7 @@ try:
         get_target_line,
         initialize_console_runtime,
         require_root,
+        refresh_console_state,
         send_mirror_message,
         validate_mirror_timeout_duration,
     )
@@ -36,6 +37,14 @@ except ImportError as e:
 def consutil(db):
     """consutil - Command-line utility for interacting with switches via console device"""
     initialize_console_runtime(db)
+
+
+@consutil.command('refresh-state', hidden=True)
+@clicommon.pass_db
+@click.argument('line')
+def refresh_state(db, line):
+    """Refresh the ownership cache of one configured console line."""
+    refresh_console_state(db, line)
 
 
 # 'show' subcommand

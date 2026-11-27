@@ -59,7 +59,7 @@ class TestCheckSwitchType:
         result = flow_dump.is_dpu_type()
 
         assert result is True
-        mock_db_connector.assert_called_once_with("CONFIG_DB", 0, True)
+        mock_db_connector.assert_called_once_with("CONFIG_DB", 0, False)
         mock_table_class.assert_called_once_with(mock_db_connector.return_value, "DEVICE_METADATA")
         mock_table.hget.assert_called_once_with("localhost", "switch_type")
 

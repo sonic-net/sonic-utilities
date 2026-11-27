@@ -31,6 +31,7 @@ import click
 import ipaddress
 import tabulate
 
+from utilities_common.redis_transport import cli_uses_unix_socket
 from swsscommon.swsscommon import ConfigDBConnector
 
 
@@ -216,7 +217,10 @@ def null_route_helper(table_name, action, ip_prefix=None):
     """
     Helper function called by 'click'.
     """
-    configdb = ConfigDBConnector()
+    if action == ACTION_LIST:
+        configdb = ConfigDBConnector(use_unix_socket_path=cli_uses_unix_socket())
+    else:
+        configdb = ConfigDBConnector(use_unix_socket_path=True, authenticate=True)
     configdb.connect()
     if action == ACTION_LIST:
         list_all_null_route_rules(configdb, table_name)

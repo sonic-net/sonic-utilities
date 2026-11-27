@@ -54,8 +54,8 @@ class TestGetNamespaceDbConnectors:
 
         assert result == [conn0, conn1]
         assert mock_swsscommon.ConfigDBConnector.call_args_list == [
-            call(namespace='asic0'),
-            call(namespace='asic1'),
+            call(use_unix_socket_path=True, namespace='asic0', authenticate=True),
+            call(use_unix_socket_path=True, namespace='asic1', authenticate=True),
         ]
         conn0.connect.assert_called_once_with()
         conn1.connect.assert_called_once_with()

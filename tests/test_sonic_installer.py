@@ -98,7 +98,7 @@ def test_install(
     expected_call_list = [
         call(["mkdir", "-p", mounted_image_folder]),
         call(["mount", "-t", "squashfs", mounted_image_folder, mounted_image_folder]),
-        call(["sonic-cfggen", "-d", "-y", f"{mounted_image_folder}/etc/sonic/sonic_version.yml", "-t", f"{mounted_image_folder}/usr/share/sonic/templates/sonic-environment.j2"]),
+        call(["sonic-cfggen", "-d", "--redis-unix-socket", "-y", f"{mounted_image_folder}/etc/sonic/sonic_version.yml", "-t", f"{mounted_image_folder}/usr/share/sonic/templates/sonic-environment.j2"]),
         call(["umount", "-r", "-f", mounted_image_folder], raise_exception=True),
         call(["rm", "-rf", mounted_image_folder], raise_exception=True),
         call(["mkdir", "-p", mounted_image_folder]),

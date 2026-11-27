@@ -1,3 +1,4 @@
+from utilities_common.redis_transport import cli_uses_unix_socket
 import ipaddress
 import json
 import re
@@ -40,7 +41,7 @@ def _canonical_neigh_ip(value):
 
 
 def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE, vrf_name=constants.DEFAULT_VRF):
-    config_db = multi_asic.connect_config_db_for_ns(namespace)
+    config_db = multi_asic.connect_config_db_for_ns(namespace, use_tcp=not cli_uses_unix_socket())
 
     neighbor_ip_canon = _canonical_neigh_ip(neighbor_ip)
 
@@ -105,7 +106,7 @@ def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE, vr
 
 
 def is_bgp_feature_state_enabled(namespace=multi_asic.DEFAULT_NAMESPACE):
-    config_db = multi_asic.connect_config_db_for_ns(namespace)
+    config_db = multi_asic.connect_config_db_for_ns(namespace, use_tcp=not cli_uses_unix_socket())
     bgp= config_db.get_entry("FEATURE","bgp")
     if "state" in bgp:
         if bgp["state"] == "enabled":
@@ -173,7 +174,7 @@ def get_bgp_neighbors_dict(namespace=multi_asic.DEFAULT_NAMESPACE):
     :return:
     """
     dynamic_neighbors = {}
-    config_db = multi_asic.connect_config_db_for_ns(namespace)
+    config_db = multi_asic.connect_config_db_for_ns(namespace, use_tcp=not cli_uses_unix_socket())
     static_neighbors = get_neighbor_dict_from_table(config_db, 'BGP_NEIGHBOR')
     static_internal_neighbors = get_neighbor_dict_from_table(config_db, 'BGP_INTERNAL_NEIGHBOR')
     static_neighbors.update(static_internal_neighbors)
@@ -190,7 +191,7 @@ def get_external_bgp_neighbors_dict(namespace=multi_asic.DEFAULT_NAMESPACE):
     Uses config_db to get the external bgp neighbors and names in dictionary format
     :return: dictionary of external bgp neighbors
     """
-    config_db = multi_asic.connect_config_db_for_ns(namespace)
+    config_db = multi_asic.connect_config_db_for_ns(namespace, use_tcp=not cli_uses_unix_socket())
     external_neighbors = get_neighbor_dict_from_table(config_db, 'BGP_NEIGHBOR')
     bgp_monitors = get_neighbor_dict_from_table(config_db, 'BGP_MONITORS')
     external_neighbors.update(bgp_monitors)

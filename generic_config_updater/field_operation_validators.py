@@ -17,7 +17,7 @@ STATE_DB_NAME = 'STATE_DB'
 REDIS_TIMEOUT_MSECS = 0
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 GCU_TABLE_MOD_CONF_FILE = f"{SCRIPT_DIR}/gcu_field_operation_validators.conf.json"
-GET_HWSKU_CMD = "sonic-cfggen -d -v DEVICE_METADATA.localhost.hwsku"
+GET_HWSKU_CMD = "sonic-cfggen -d --redis-unix-socket -v DEVICE_METADATA.localhost.hwsku"
 
 
 def get_asic_name():
@@ -208,7 +208,7 @@ def buffer_profile_config_update_validator(scope, patch_element):
 
 
 def read_statedb_entry(scope, table, key, field):
-    state_db = swsscommon.DBConnector(STATE_DB_NAME, REDIS_TIMEOUT_MSECS, True, scope)
+    state_db = swsscommon.DBConnector(STATE_DB_NAME, REDIS_TIMEOUT_MSECS, False, scope)
     tbl = swsscommon.Table(state_db, table)
     return tbl.hget(key, field)[1]
 

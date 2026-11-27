@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pytest
 import fnmatch
 import textwrap
@@ -6,6 +9,7 @@ from unittest.mock import patch, MagicMock
 from config.main import config as config_cli
 from show.main import cli as show_cli
 from click.testing import CliRunner
+from .mock_tables import dbconnector
 
 
 @pytest.fixture
@@ -60,18 +64,33 @@ def sonicv2connector_mock():
 
 
 @pytest.fixture
-def multi_asic():
+def multi_asic(tmp_path):
     global_namespace = ""
     asic_namespaces = ["asic0", "asic1", "asic2", "asic3"]
     namespaces = [global_namespace] + asic_namespaces
-    with patch("config.main.multi_asic.is_multi_asic", return_value=True), \
-         patch("config.main.multi_asic.get_namespace_list", return_value=asic_namespaces), \
-         patch("show.warm_restart.multi_asic.is_multi_asic", return_value=True), \
-         patch("show.warm_restart.multi_asic.get_namespace_list", return_value=asic_namespaces):
-        yield {
-            "namespaces": namespaces,
-            "asic_namespaces": asic_namespaces,
-        }
+    db_config = Path(__file__).parent / "mock_tables" / "database_config.json"
+    (tmp_path / "database_config.json").write_text(db_config.read_text())
+    db_file_path = "database_config.json"
+    global_db_file_path = tmp_path / "database_global.json"
+    global_db_file_path.write_text(json.dumps({
+        "INCLUDES": [{"include": db_file_path}] + [
+            {"namespace": namespace, "include": db_file_path}
+            for namespace in asic_namespaces
+        ],
+        "VERSION": "1.0",
+    }))
+    dbconnector.load_namespace_config(str(global_db_file_path))
+    try:
+        with patch("config.main.multi_asic.is_multi_asic", return_value=True), \
+             patch("config.main.multi_asic.get_namespace_list", return_value=asic_namespaces), \
+             patch("show.warm_restart.multi_asic.is_multi_asic", return_value=True), \
+             patch("show.warm_restart.multi_asic.get_namespace_list", return_value=asic_namespaces):
+            yield {
+                "namespaces": namespaces,
+                "asic_namespaces": asic_namespaces,
+            }
+    finally:
+        dbconnector.load_database_config()
 
 
 def test_config_warm_restart_enable(sonicv2connector_mock, configdbconnector_mock):

@@ -1509,7 +1509,7 @@ class TestVlan(object):
                               mock.call(['docker', 'exec', '-i', 'swss', 'cp', '/usr/share/sonic/templates/ndppd.conf',
                                          '/etc/supervisor/conf.d/']),
                               mock.call(['docker', 'exec', '-i', 'swss', 'supervisorctl', 'update'], return_cmd=True),
-                              mock.call(['docker', 'exec', '-i', 'swss', 'sonic-cfggen', '-d', '-t',
+                              mock.call(['docker', 'exec', '-i', 'swss', 'sonic-cfggen', '-d', '--redis-unix-socket', '-t',
                                          '/usr/share/sonic/templates/ndppd.conf.j2,/etc/ndppd.conf']),
                               mock.call(['docker', 'exec', '-i', 'swss', 'supervisorctl', 'restart', 'ndppd'],
                                         return_cmd=True)]

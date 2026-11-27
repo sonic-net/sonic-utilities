@@ -1752,10 +1752,8 @@ class TestConsutilMirror(object):
         assert "Target [9] does not exist" in result.output
 
     @mock.patch.dict(os.environ, {"SUDO_USER": "admin"})
-    @mock.patch('os.getuid', mock.MagicMock(side_effect=AssertionError("getuid should not be used under sudo")))
     @mock.patch('os.getpid', mock.MagicMock(return_value=4321))
     @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
-    @mock.patch('pwd.getpwuid', mock.MagicMock(side_effect=AssertionError("getpwuid should not be used under sudo")))
     def test_mirror_start_success_with_options(self):
         runner = CliRunner()
         db = self._db_with_console_ports()
@@ -1767,11 +1765,13 @@ class TestConsutilMirror(object):
                             "timeout": "30m",
                             "remaining": "30m"
                         })) as mock_send:
-            result = runner.invoke(
-                consutil.consutil.commands["mirror"].commands["start"],
-                ['--direction', 'rx', '--timeout', '30m',
-                    '--max-file-size', '128', '1'],
-                obj=db)
+            with mock.patch('os.getuid', side_effect=AssertionError("getuid should not be used under sudo")), \
+                 mock.patch('pwd.getpwuid', side_effect=AssertionError("getpwuid should not be used under sudo")):
+                result = runner.invoke(
+                    consutil.consutil.commands["mirror"].commands["start"],
+                    ['--direction', 'rx', '--timeout', '30m',
+                        '--max-file-size', '128', '1'],
+                    obj=db)
 
         print(result.exit_code)
         print(sys.stderr, result.output)
@@ -1793,7 +1793,6 @@ class TestConsutilMirror(object):
         assert "Remaining: 30m" in result.output
 
     @mock.patch.dict(os.environ, {"SUDO_USER": "admin"})
-    @mock.patch('os.getuid', mock.MagicMock(side_effect=AssertionError("getuid should not be used under sudo")))
     @mock.patch('os.getpid', mock.MagicMock(return_value=4321))
     @mock.patch('os.geteuid', mock.MagicMock(return_value=0))
     def test_mirror_start_uses_protocol_defaults(self):
@@ -1802,8 +1801,9 @@ class TestConsutilMirror(object):
 
         with mock.patch('consutil.main.send_mirror_message',
                         mock.MagicMock(return_value=self._default_start_response())) as mock_send:
-            result = runner.invoke(
-                consutil.consutil.commands["mirror"].commands["start"], ['1'], obj=db)
+            with mock.patch('os.getuid', side_effect=AssertionError("getuid should not be used under sudo")):
+                result = runner.invoke(
+                    consutil.consutil.commands["mirror"].commands["start"], ['1'], obj=db)
 
         assert result.exit_code == 0
         mock_send.assert_called_once_with(

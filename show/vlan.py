@@ -1,3 +1,4 @@
+from utilities_common.redis_transport import cli_uses_unix_socket
 import click
 from natsort import natsorted
 from tabulate import tabulate
@@ -162,8 +163,8 @@ def brief(verbose, namespace):
         if multi_asic.is_multi_asic() and len(ns_list) > 1:
             click.echo("\nNamespace: {}".format(ns))
 
-        config_db = multi_asic.connect_config_db_for_ns(ns)
-        ns_db = multi_asic.connect_to_all_dbs_for_ns(ns)
+        config_db = multi_asic.connect_config_db_for_ns(ns, use_tcp=not cli_uses_unix_socket())
+        ns_db = multi_asic.connect_to_all_dbs_for_ns(ns, use_tcp=not cli_uses_unix_socket())
 
         # Create a db-like object for compatibility with getter functions
         class ConfigDbWrapper:
@@ -228,8 +229,8 @@ def config(namespace):
         if multi_asic.is_multi_asic() and len(ns_list) > 1:
             click.echo("\nNamespace: {}".format(ns))
 
-        config_db = multi_asic.connect_config_db_for_ns(ns)
-        ns_db = multi_asic.connect_to_all_dbs_for_ns(ns)
+        config_db = multi_asic.connect_config_db_for_ns(ns, use_tcp=not cli_uses_unix_socket())
+        ns_db = multi_asic.connect_to_all_dbs_for_ns(ns, use_tcp=not cli_uses_unix_socket())
 
         # Create a db-like object for compatibility with helper function
         class ConfigDbWrapper:

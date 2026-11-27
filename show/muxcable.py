@@ -1,5 +1,7 @@
 
 import json
+import os
+from functools import wraps
 import sys
 import time
 
@@ -40,6 +42,39 @@ XCVRD_GET_BER_CMD_TABLE = "XCVRD_GET_BER_CMD"
 XCVRD_GET_BER_RSP_TABLE = "XCVRD_GET_BER_RSP"
 XCVRD_GET_BER_RES_TABLE = "XCVRD_GET_BER_RES"
 XCVRD_GET_BER_CMD_ARG_TABLE = "XCVRD_GET_BER_CMD_ARG"
+FIRMWARE_VERSION_SUDO_OPTION = "--preserve-download-state"
+
+
+def _run_query_as_root(callback):
+    @wraps(callback)
+    def invoke(*args, **kwargs):
+        if os.geteuid() == 0:
+            return callback(*args, **kwargs)
+        context = click.get_current_context()
+        parameters = context.params
+        path = []
+        while context.command.name != 'muxcable':
+            path.insert(0, context.command.name)
+            context = context.parent
+        if path == ['firmware', 'version']:
+            path.append(FIRMWARE_VERSION_SUDO_OPTION)
+        for key, option in (('json_output', '--json'), ('active', '--active')):
+            if parameters.get(key):
+                path.append(option)
+        arguments = []
+        for name in ('port', 'target'):
+            value = parameters.get(name)
+            if value is not None:
+                if not value or any(character.isspace() for character in value):
+                    raise click.BadParameter('Expected one port name or target')
+                arguments.append(value)
+        if arguments:
+            path.extend(['--', *arguments])
+        # queueinfo's optional vendor string is unused by ycabled.queue_info().
+        command = ['/usr/bin/sudo', '-n', '/usr/local/bin/show', 'muxcable', *path]
+        os.execv(command[0], command)
+    return invoke
+
 
 def get_asic_index_for_port(port):
     asic_index = None
@@ -57,7 +92,7 @@ def get_asic_index_for_port(port):
     return asic_index
 
 def db_connect(db_name, namespace=EMPTY_NAMESPACE):
-    return swsscommon.DBConnector(db_name, REDIS_TIMEOUT_MSECS, True, namespace)
+    return swsscommon.DBConnector(db_name, REDIS_TIMEOUT_MSECS, False, namespace, True)
 
 
 def delete_all_keys_in_db_table(db_type, table_name):
@@ -691,6 +726,7 @@ def create_table_dump_per_port_tunnel_route(db, print_data, per_npu_configdb, pe
 @click.argument('port', required=False, default=None)
 @click.option('--json', 'json_output', required=False, is_flag=True, type=click.BOOL, help="display the output in json format")
 @clicommon.pass_db
+@_run_query_as_root
 def status(db, port, json_output):
     """Show muxcable status information"""
 
@@ -974,6 +1010,7 @@ def config(db, port, json_output):
 @click.argument('target', metavar='<target> NIC TORA TORB LOCAL', required=True, default=None, type=click.Choice(["NIC", "TORA", "TORB", "LOCAL"]))
 @click.option('--json', 'json_output', required=False, is_flag=True, type=click.BOOL, help="display the output in json format")
 @clicommon.pass_db
+@_run_query_as_root
 def berinfo(db, port, target, json_output):
     """Show muxcable BER (bit error rate) information"""
 
@@ -1026,6 +1063,7 @@ def berinfo(db, port, target, json_output):
 @click.argument('target', metavar='<target> NIC TORA TORB LOCAL', required=True, default=None, type=click.Choice(["NIC", "TORA", "TORB", "LOCAL"]))
 @click.option('--json', 'json_output', required=False, is_flag=True, type=click.BOOL, help="display the output in json format")
 @clicommon.pass_db
+@_run_query_as_root
 def eyeinfo(db, port, target, json_output):
     """Show muxcable eye information in mv"""
 
@@ -1077,6 +1115,7 @@ def eyeinfo(db, port, target, json_output):
 @click.argument('target', metavar='<target> NIC TORA TORB LOCAL', required=True, default=None, type=click.Choice(["NIC", "TORA", "TORB", "LOCAL"]))
 @click.option('--json', 'json_output', required=False, is_flag=True, type=click.BOOL, help="display the output in json format")
 @clicommon.pass_db
+@_run_query_as_root
 def fecstatistics(db, port, target, json_output):
     """Show muxcable fec layer statistics information, target NIC TORA TORB"""
 
@@ -1128,6 +1167,7 @@ def fecstatistics(db, port, target, json_output):
 @click.argument('target', metavar='<target> NIC TORA TORB LOCAL', required=True, default=None, type=click.Choice(["NIC", "TORA", "TORB", "LOCAL"]))
 @click.option('--json', 'json_output', required=False, is_flag=True, type=click.BOOL, help="display the output in json format")
 @clicommon.pass_db
+@_run_query_as_root
 def pcsstatistics(db, port, target, json_output):
     """Show muxcable pcs layer statistics information"""
 
@@ -1180,6 +1220,8 @@ def pcsstatistics(db, port, target, json_output):
 @clicommon.pass_db
 def debugdumpregisters(db, port, option, json_output):
     """Show muxcable debug deump registers information, preagreed by vendors"""
+    if os.geteuid() != 0:
+        raise click.ClickException("Vendor debug operations require sudo show muxcable debugdumpregisters")
 
     port = platform_sfputil_helper.get_interface_name(port, db)
     delete_all_keys_in_db_table("APPL_DB", "XCVRD_GET_BER_CMD")
@@ -1225,6 +1267,7 @@ def debugdumpregisters(db, port, option, json_output):
 @click.argument('port', metavar='<port_name>', required=True, default=None)
 @click.option('--json', 'json_output', required=False, is_flag=True, type=click.BOOL, help="display the output in json format")
 @clicommon.pass_db
+@_run_query_as_root
 def alivecablestatus(db, port, json_output):
     """Show muxcable alive information """
 
@@ -1395,6 +1438,7 @@ def hwmode():
 @click.argument('port', metavar='<port_name>', required=False, default=None)
 @click.option('--json', 'json_output', required=False, is_flag=True, type=click.BOOL, help="display the output in json format")
 @clicommon.pass_db
+@_run_query_as_root
 def muxdirection(db, port, json_output):
     """Shows the current direction of the muxcable {active/standby}"""
 
@@ -1518,6 +1562,7 @@ def muxdirection(db, port, json_output):
 @hwmode.command()
 @click.argument('port', metavar='<port_name>', required=False, default=None)
 @clicommon.pass_db
+@_run_query_as_root
 def switchmode(db, port):
     """Shows the current switching mode of the muxcable {auto/manual}"""
 
@@ -1747,13 +1792,14 @@ def firmware():
 @firmware.command()
 @click.argument('port', metavar='<port_name>', required=True, default=None)
 @click.option('--active', 'active', required=False, is_flag=True, type=click.BOOL, help="display the firmware version of only active bank within MCU's")
+# The sudo policy requires this option so older utilities reject the invocation.
+@click.option(FIRMWARE_VERSION_SUDO_OPTION, is_flag=True, hidden=True, expose_value=False)
 @clicommon.pass_db
+@_run_query_as_root
 def version(db, port, active):
     """Show muxcable firmware version"""
 
     port = platform_sfputil_helper.get_interface_name(port, db)
-    delete_all_keys_in_db_table("APPL_DB", "XCVRD_DOWN_FW_CMD")
-    delete_all_keys_in_db_table("STATE_DB", "XCVRD_DOWN_FW_RSP")
     delete_all_keys_in_db_table("APPL_DB", "XCVRD_SHOW_FW_CMD")
     delete_all_keys_in_db_table("STATE_DB", "XCVRD_SHOW_FW_RSP")
     delete_all_keys_in_db_table("STATE_DB", "XCVRD_SHOW_FW_RES")
@@ -1926,6 +1972,7 @@ def metrics(db, port, json_output):
 @click.argument('port', metavar='<port_name>', required=True, default=None)
 @click.option('--json', 'json_output', required=False, is_flag=True, type=click.BOOL, help="display the output in json format")
 @clicommon.pass_db
+@_run_query_as_root
 def event_log(db, port, json_output):
     """Show muxcable event log <port>"""
 
@@ -1973,6 +2020,7 @@ def event_log(db, port, json_output):
 @click.argument('port', metavar='<port_name>', required=True, default=None)
 @click.option('--json', 'json_output', required=False, is_flag=True, type=click.BOOL, help="display the output in json format")
 @clicommon.pass_db
+@_run_query_as_root
 def get_fec_anlt_speed(db, port, json_output):
     """Show muxcable configurations for fec anlt speed <port>"""
 
@@ -2333,6 +2381,7 @@ def muxdirection(db, port, json_output):
 @click.argument('option', required=False, default=None)
 @click.option('--json', 'json_output', required=False, is_flag=True, type=click.BOOL, help="display the output in json format")
 @clicommon.pass_db
+@_run_query_as_root
 def queueinfo(db, port, option, json_output):
     """Show muxcable queue info information, preagreed by vendors"""
 
@@ -2373,6 +2422,7 @@ def queueinfo(db, port, option, json_output):
 @click.argument('port', metavar='<port_name>', required=True, default=None)
 @click.option('--json', 'json_output', required=False, is_flag=True, type=click.BOOL, help="display the output in json format")
 @clicommon.pass_db
+@_run_query_as_root
 def health(db, port, json_output):
     """Show muxcable health information as Ok or Not Ok"""
 
@@ -2431,6 +2481,7 @@ def health(db, port, json_output):
 @click.argument('port', metavar='<port_name>', required=True, default=None)
 @click.option('--json', 'json_output', required=False, is_flag=True, type=click.BOOL, help="display the output in json format")
 @clicommon.pass_db
+@_run_query_as_root
 def resetcause(db, port, json_output):
     """Show muxcable resetcause information """
 
@@ -2484,6 +2535,7 @@ def resetcause(db, port, json_output):
 @click.argument('port', metavar='<port_name>', required=True, default=None)
 @click.option('--json', 'json_output', required=False, is_flag=True, type=click.BOOL, help="display the output in json format")
 @clicommon.pass_db
+@_run_query_as_root
 def operationtime(db, port, json_output):
     """Show muxcable operation time hh:mm:ss forrmat"""
 

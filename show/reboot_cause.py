@@ -4,6 +4,7 @@ import sys
 
 import click
 from tabulate import tabulate
+from utilities_common.redis_transport import cli_uses_unix_socket
 from swsscommon.swsscommon import SonicV2Connector
 import utilities_common.cli as clicommon
 from utilities_common.chassis import is_smartswitch, get_all_dpu_options
@@ -40,7 +41,7 @@ def fetch_data_from_db(module_name, fetch_history=False, use_chassis_db=False):
             rdb.connect(rdb.CHASSIS_STATE_DB)
             table_keys = rdb.keys(rdb.CHASSIS_STATE_DB, prefix+'*')
         else:
-            rdb = SonicV2Connector(host='127.0.0.1')
+            rdb = SonicV2Connector(use_unix_socket_path=cli_uses_unix_socket(), host='127.0.0.1')
             rdb.connect(rdb.STATE_DB, False)   # Make one attempt only
             table_keys = rdb.keys(rdb.STATE_DB, prefix+'*')
     except Exception:

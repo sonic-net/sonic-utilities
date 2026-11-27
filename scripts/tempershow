@@ -8,6 +8,7 @@ import json
 from datetime import datetime
 
 from tabulate import tabulate
+from utilities_common.redis_transport import cli_uses_unix_socket
 from swsscommon.swsscommon import SonicDBConfig, SonicV2Connector
 from natsort import natsorted
 
@@ -74,7 +75,7 @@ class TemperShow(object):
         else:
             if not SonicDBConfig.isInit():
                 SonicDBConfig.load_sonic_db_config()
-        self.db = SonicV2Connector(host="127.0.0.1")
+        self.db = SonicV2Connector(use_unix_socket_path=cli_uses_unix_socket(), host="127.0.0.1")
         self.db.connect(self.db.STATE_DB)
         self._port_index_map = self._build_port_index_map()
 
@@ -161,11 +162,11 @@ class TemperShow(object):
             # silently drop SFP rows from the other namespaces.
             for ns in namespaces:
                 try:
-                    connections.append(multi_asic.connect_to_all_dbs_for_ns(ns))
+                    connections.append(multi_asic.connect_to_all_dbs_for_ns(ns, use_tcp=not cli_uses_unix_socket()))
                 except Exception:
                     continue
         if not connections:
-            db = SonicV2Connector(host="127.0.0.1")
+            db = SonicV2Connector(use_unix_socket_path=cli_uses_unix_socket(), host="127.0.0.1")
             db.connect(db.STATE_DB)
             connections.append(db)
         return connections

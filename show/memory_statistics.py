@@ -13,6 +13,7 @@ import click
 from dataclasses import dataclass
 
 # Local imports
+from utilities_common.redis_transport import cli_uses_unix_socket
 from swsscommon.swsscommon import ConfigDBConnector
 
 
@@ -131,7 +132,7 @@ class SonicDBConnector:
     """
 
     def __init__(self) -> None:
-        self.config_db = ConfigDBConnector()
+        self.config_db = ConfigDBConnector(use_unix_socket_path=cli_uses_unix_socket())
         self._connect_with_retry()
 
     def _connect_with_retry(self, max_retries: int = 3, retry_delay: float = 1.0) -> None:

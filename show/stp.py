@@ -2,6 +2,7 @@ import re
 import click
 # import subprocess
 import utilities_common.cli as clicommon
+from utilities_common.redis_transport import cli_uses_unix_socket
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 
 
@@ -33,13 +34,13 @@ def is_stp_docker_running():
 
 
 def connect_to_cfg_db():
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(use_unix_socket_path=cli_uses_unix_socket())
     config_db.connect()
     return config_db
 
 
 def connect_to_appl_db():
-    appl_db = SonicV2Connector(host="127.0.0.1")
+    appl_db = SonicV2Connector(use_unix_socket_path=cli_uses_unix_socket(), host="127.0.0.1")
     appl_db.connect(appl_db.APPL_DB)
     return appl_db
 

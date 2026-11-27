@@ -208,7 +208,7 @@ def test_member_selection_and_namespace(keepalive, port_channel, namespace, pres
 
     assert active == ["Ethernet0", "Ethernet4"]
     assert list(packets) == active
-    assert connector.call_args_list == [mock.call(namespace=namespace)] * 2
+    assert connector.call_args_list == [mock.call(use_unix_socket_path=True, namespace=namespace)] * 2
     assert config.call_args_list == [mock.call("PortChannel1", namespace), mock.call("PortChannel2", namespace)]
     assert craft.call_args_list == [
         mock.call(port_channel, "Ethernet0", preserve_retry_count=preserve),

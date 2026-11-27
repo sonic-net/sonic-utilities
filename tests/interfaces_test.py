@@ -1134,9 +1134,9 @@ def setup_labelport_status_test(monkeypatch, platform_data, port_tables_by_ns,
     monkeypatch.setattr(interfaces_mod.multi_asic, 'get_asic_index_from_namespace',
                         lambda namespace: asic_indexes[namespace])
     monkeypatch.setattr(interfaces_mod.multi_asic, 'get_port_table',
-                        lambda namespace=None: port_tables_by_ns[namespace])
+                        lambda namespace=None, *, use_tcp: port_tables_by_ns[namespace])
     monkeypatch.setattr(interfaces_mod.multi_asic, 'connect_to_all_dbs_for_ns',
-                        lambda namespace=None: MockLabelPortDb(oper_status_by_ns.get(namespace, {})))
+                        lambda namespace=None, *, use_tcp: MockLabelPortDb(oper_status_by_ns.get(namespace, {})))
 
 
 def invoke_labelport_status():

@@ -213,7 +213,7 @@ def get_container_image_id_all(image_name):
 
 
 def hget_warm_restart_table(db_name, table_name, warm_app_name, key):
-    db = SonicV2Connector()
+    db = SonicV2Connector(use_unix_socket_path=True)
     db.connect(db_name, False)
     _hash = table_name + db.get_db_separator(db_name) + warm_app_name
     client = db.get_redis_client(db_name)
@@ -221,7 +221,7 @@ def hget_warm_restart_table(db_name, table_name, warm_app_name, key):
 
 
 def hdel_warm_restart_table(db_name, table_name, warm_app_name, key):
-    db = SonicV2Connector()
+    db = SonicV2Connector(use_unix_socket_path=True, authenticate=True)
     db.connect(db_name, False)
     _hash = table_name + db.get_db_separator(db_name) + warm_app_name
     client = db.get_redis_client(db_name)
@@ -296,6 +296,7 @@ def update_sonic_environment(bootloader, binary_image_version):
             sonic_env = run_command_or_raise([
                     "sonic-cfggen",
                     "-d",
+                    "--redis-unix-socket",
                     "-y",
                     next_sonic_version_yml_file,
                     "-t",

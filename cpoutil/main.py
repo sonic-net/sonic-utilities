@@ -16,6 +16,7 @@ from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages.consts import CMI
 from sonic_platform_base.sonic_xcvr.optoe_eeprom_rw import OptoeEepromReadWriteMixin
 from sonic_platform_base.sonic_xcvr.xcvr_eeprom import XcvrEeprom
 from utilities_common import platform_sfputil_helper
+from utilities_common.redis_transport import cli_uses_unix_socket
 from utilities_common.platform_sfputil_helper import (
     CMIS_DOM_CHANNEL_MONITOR_MAP,
     DOM_CHANNEL_THRESHOLD_MAP,
@@ -87,7 +88,7 @@ def load_current_port_config():
         platform_sfputil_helper.load_platform_sfputil()
     platform_sfputil_helper.platform_sfputil_read_porttab_mappings()
     # Read each namespace once instead of discovering it for every port.
-    port_table = multi_asic.get_port_table()
+    port_table = multi_asic.get_port_table(use_tcp=not cli_uses_unix_socket())
     current_port_config = {}
     for port in platform_sfputil_helper.get_logical_list():
         lanes = port_table.get(port, {}).get("lanes")
