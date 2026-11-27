@@ -3,10 +3,11 @@ from types import SimpleNamespace
 import pytest
 
 from .cpoutil_test import coverage_environment as _coverage_environment
-from .cpoutil_test import invoke_coverage, shared_port_mapping  # noqa: F401
+from .cpoutil_test import cpoutil, invoke_coverage, shared_port_mapping  # noqa: F401
 
 
 coverage_environment = _coverage_environment
+real_eeprom_linear_offset = cpoutil._eeprom_linear_offset
 
 
 @pytest.fixture
@@ -51,6 +52,44 @@ def test_declared_page_is_accessible(endpoints, operation, interface, target, pa
 
 
 @pytest.mark.parametrize('operation', ['read-eeprom', 'write-eeprom'])
+def test_eeprom_reports_unimplemented_endpoint_api(endpoints, operation):
+    cpo, _ = endpoints
+
+    def get_api():
+        raise NotImplementedError
+
+    cpo.elsfp.get_api = get_api
+    result = invoke_coverage(command(operation, 'els', False, 0xB4))
+    assert result.exit_code == 1, result.output
+    assert 'ELS0 ELSFP API is not implemented' in result.output
+    assert cpo.reads == [] and cpo.writes == []
+
+
+@pytest.mark.parametrize('operation', ['read-eeprom', 'write-eeprom'])
+@pytest.mark.parametrize('interface', [False, True])
+@pytest.mark.parametrize('offset', [0x00, 0x80, 0xFF])
+def test_els_lower_memory_mirror_uses_physical_upper_offsets(endpoints, monkeypatch, operation, interface, offset):
+    from sonic_platform_base.sonic_xcvr.codes.public.cmis import CmisCodes
+    from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages import CmisAdministrativeLowerPage
+
+    cpo, maps = endpoints
+    monkeypatch.setattr(cpoutil, '_eeprom_linear_offset', real_eeprom_linear_offset)
+    maps['els'].pages = [CmisAdministrativeLowerPage(CmisCodes, page=0xB0)]
+    result = invoke_coverage(command(operation, 'els', interface, 0xB0, offset=offset))
+    if offset < 0x80:
+        assert result.exit_code == 1, result.output
+        assert "valid range: 80h-FFh" in result.output
+        assert cpo.reads == [] and cpo.writes == []
+    else:
+        assert result.exit_code == 0, result.output
+        address = 0x5800 + offset
+        if operation == 'read-eeprom':
+            assert cpo.reads == [(address, 1)]
+        else:
+            assert cpo.writes == [(address, 1, bytearray([1]))]
+
+
+@pytest.mark.parametrize('operation', ['read-eeprom', 'write-eeprom'])
 @pytest.mark.parametrize('interface', [False, True])
 @pytest.mark.parametrize('target,page', [
     ('oe', 0x30), ('oe', 0xB4), ('els', 0), ('els', 0x10), ('els', 0xB0), ('els', 0xB8),
@@ -64,8 +103,8 @@ def test_undeclared_page_is_rejected_before_io(endpoints, operation, interface, 
 
 
 @pytest.mark.parametrize('operation', ['read-eeprom', 'write-eeprom'])
-@pytest.mark.parametrize('lower,offset,size', [(False, 0, 1), (False, 127, 2), (True, 128, 1), (True, 127, 2)])
-def test_page_half_is_enforced(endpoints, operation, lower, offset, size):
+@pytest.mark.parametrize('lower,offset', [(False, 0), (True, 128)])
+def test_page_half_is_enforced(endpoints, operation, lower, offset):
     from sonic_platform_base.sonic_xcvr.codes.public.cmis import CmisCodes
     from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis import CmisFlatMemMap
 
@@ -73,16 +112,27 @@ def test_page_half_is_enforced(endpoints, operation, lower, offset, size):
     mem_map = CmisFlatMemMap(CmisCodes)
     mem_map.pages = [mem_map.pages[0 if lower else 1]]
     cpo.oe.get_api().xcvr_eeprom.mem_map = mem_map
-    result = invoke_coverage(command(operation, 'oe', False, 0, offset, size))
+    result = invoke_coverage(command(operation, 'oe', False, 0, offset))
     assert result.exit_code == 1, result.output
     assert 'does not cover offsets' in result.output
     assert cpo.reads == [] and cpo.writes == []
 
 
 @pytest.mark.parametrize('operation', ['read-eeprom', 'write-eeprom'])
-def test_page_zero_can_span_both_declared_halves(endpoints, operation):
+@pytest.mark.parametrize('interface', [False, True])
+def test_page_zero_cannot_span_both_declared_halves(endpoints, operation, interface):
     cpo, _ = endpoints
-    result = invoke_coverage(command(operation, 'oe', False, 0, 120, 16))
+    result = invoke_coverage(command(operation, 'oe', interface, 0, 127, 2))
+    assert result.exit_code == 1, result.output
+    assert 'crosses the lower/upper memory boundary' in result.output
+    assert cpo.reads == [] and cpo.writes == []
+
+
+@pytest.mark.parametrize('operation', ['read-eeprom', 'write-eeprom'])
+@pytest.mark.parametrize('offset,size', [(126, 2), (128, 2)])
+def test_page_zero_allows_ranges_on_either_side_of_boundary(endpoints, operation, offset, size):
+    cpo, _ = endpoints
+    result = invoke_coverage(command(operation, 'oe', False, 0, offset, size))
     assert result.exit_code == 0, result.output
     assert len(cpo.reads if operation == 'read-eeprom' else cpo.writes) == 1
 
