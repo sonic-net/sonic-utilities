@@ -1059,6 +1059,69 @@ class TestPortStat(object):
         assert captured.out == ''
         assert "Port Ethernet0 not found in COUNTERS_PORT_NAME_MAP" in captured.err
 
+    # Ports present in every mock COUNTERS_DB that an in-process run may see.
+    # The default mock_tables/counters_db.json has these three, the copied
+    # portstat_db/counters_db.json adds Ethernet9.
+    MOCK_PORTS = {'Ethernet0', 'Ethernet4', 'Ethernet8'}
+
+    def _portstat_counter_reads(self, argv):
+        # Run scripts/portstat main() in-process against the mock DB and
+        # return the ports whose COUNTERS entry it read.
+        import utilities_common.portstat as portstat_lib
+        portstat_script = self._load_portstat_script()
+        real_get = portstat_lib.CounterTable.get
+        with mock.patch.object(portstat_lib.CounterTable, 'get', autospec=True,
+                               side_effect=real_get) as counter_get, \
+                mock.patch.object(portstat_script.time, 'sleep'), \
+                mock.patch('sys.argv', argv):
+            portstat_script.main()
+        return {call.args[2] for call in counter_get.call_args_list}
+
+    @pytest.mark.parametrize('argv, expected_ports', [
+        (['portstat', '-fh', '-i', 'Ethernet0'], {'Ethernet0'}),
+        (['portstat', '-i', 'Ethernet4,Ethernet8'], {'Ethernet4', 'Ethernet8'}),
+        (['portstat', '-f', '-i', 'Ethernet0-4'], {'Ethernet0', 'Ethernet4'}),
+        (['portstat', '-l', '-i', 'Ethernet4'], {'Ethernet4'}),
+        (['portstat', '-j', '-i', 'Ethernet8'], {'Ethernet8'}),
+        (['portstat', '-p', '1', '-i', 'Ethernet8'], {'Ethernet8'}),
+    ])
+    def test_portstat_reads_only_requested_interfaces(self, argv, expected_ports):
+        # 'show interfaces counters fec-histogram <port>' runs
+        # 'portstat -fh -i <port>', and generate_dump runs it once per port,
+        # so reading every port here makes techsupport O(ports^2).
+        remove_tmp_cnstat_file()
+        assert self._portstat_counter_reads(argv) == expected_ports
+
+    def test_portstat_without_interface_reads_all_ports(self):
+        remove_tmp_cnstat_file()
+        assert self._portstat_counter_reads(['portstat']) >= self.MOCK_PORTS
+
+    def test_portstat_clear_with_interface_saves_all_ports(self):
+        # The 'portstat -c' snapshot is the baseline for every port, so
+        # '-i' must not narrow what is saved.
+        remove_tmp_cnstat_file()
+        portstat_script = self._load_portstat_script()
+        with mock.patch.object(portstat_script, '_reset_fec_rate_fields'), \
+                mock.patch('sys.argv', ['portstat', '-c', '-i', 'Ethernet0']):
+            with pytest.raises(SystemExit) as exc:
+                portstat_script.main()
+        assert exc.value.code == 0
+
+        cache_file = os.path.join(UserCache("portstat").get_directory(), "portstat")
+        with open(cache_file, 'r') as f:
+            cnstat_cached = json.load(f)
+        assert set(cnstat_cached) - {'time'} >= self.MOCK_PORTS
+        remove_tmp_cnstat_file()
+
+    def test_show_intf_counters_fec_histogram_port_not_in_counters_map(self):
+        # COUNTERS_PORT_NAME_MAP is populated but has no entry for the port:
+        # report the port as not found, not the map as empty.
+        remove_tmp_cnstat_file()
+        return_code, result = get_result_and_return_code(
+            ['portstat', '-fh', '-i', 'Ethernet100'])
+        assert return_code == 1
+        assert result == "Port Ethernet100 not found in COUNTERS_PORT_NAME_MAP"
+
     def test_show_intf_counters_on_sup(self):
         remove_tmp_cnstat_file()
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "1"
