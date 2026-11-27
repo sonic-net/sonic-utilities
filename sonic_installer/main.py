@@ -922,10 +922,25 @@ def upgrade_docker(container_name, url, cleanup_image, skip_check, tag, warm):
 
     # warm restart enable/disable config is put in stateDB, not persistent across cold reboot, not saved to config_DB.json file
     warm_configured = hget_warm_restart_table('STATE_DB', 'WARM_RESTART_ENABLE_TABLE', container_name, 'enable') == "true"
+    warm_restart_enabled = False
+
+    def restore_cold_restart_setting():
+        nonlocal warm_restart_enabled
+        if warm_restart_enabled:
+            warm_restart_enabled = False
+            run_command(["config", "warm_restart", "disable", container_name])
 
     if container_name == "swss" or container_name == "bgp" or container_name == "teamd":
+        # The applications also warm start when system warm restart is enabled
+        if not warm_configured and \
+                hget_warm_restart_table('STATE_DB', 'WARM_RESTART_ENABLE_TABLE', 'system', 'enable') == "true":
+            echo_and_log("System warm restart is enabled, performing warm upgrade of {}".format(container_name))
+            warm_configured = True
         if warm_configured is False and warm:
             run_command(["config", "warm_restart", "enable", "%s" % container_name])
+            warm_restart_enabled = True
+            # Restore the cold restart setting even if a later command fails and exits
+            click.get_current_context().call_on_close(restore_cold_restart_setting)
 
     # Fetch tag of current running image
     tag_previous = get_docker_tag_name(image_latest)
@@ -948,8 +963,7 @@ def upgrade_docker(container_name, url, cleanup_image, skip_check, tag, warm):
                 if not skip_check:
                     echo_and_log("Orchagent is not in clean state, RESTARTCHECK failed", LOG_ERR)
                     # Restore original config before exit
-                    if warm_configured is False and warm:
-                        run_command(["config", "warm_restart", "disable", "%s" % container_name])
+                    restore_cold_restart_setting()
                     # Clean the image loaded earlier
                     image_id_latest = get_container_image_id(image_latest)
                     run_command(["docker", "rmi", "-f", "%s" % image_id_latest])
@@ -1024,9 +1038,7 @@ def upgrade_docker(container_name, url, cleanup_image, skip_check, tag, warm):
         exp_state = ""  # this is cold upgrade
 
     # Restore to previous cold restart setting
-    if warm_configured is False and warm:
-        if container_name == "swss" or container_name == "bgp" or container_name == "teamd":
-            run_command(["config", "warm_restart", "disable", container_name])
+    restore_cold_restart_setting()
 
     if state == exp_state:
         echo_and_log('Done')
