@@ -11,7 +11,7 @@ import sys
 import threading
 import time
 from sonic_py_common import device_info
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 from tests.route_check_test_data import (
     APPL_DB, MULTI_ASIC, NAMESPACE, DEFAULTNS, ARGS, ASIC_DB, CONFIG_DB,
     DEFAULT_CONFIG_DB, APPL_STATE_DB, OP_DEL, OP_SET, PRE, RESULT, RET, TEST_DATA,
@@ -134,7 +134,7 @@ class MockSelector:
         if self.select_state == 0:
             self.select_state = self.TIMEOUT
         else:
-            time.sleep(timeout)
+            time.sleep(timeout / 1000.0)
 
         return (state, None)
 
@@ -174,16 +174,14 @@ class MockSubscriber:
 def subscriber_side_effect(db, tbl):
     global subscribers_returned
     key = "db_{}_{}_tbl_{}".format(db["namespace"], db["name"], tbl)
-    if key not in subscribers_returned:
-        subscribers_returned[key] = MockSubscriber(db, tbl)
+    subscribers_returned[key] = MockSubscriber(db, tbl)
     return subscribers_returned[key]
 
 
 def select_side_effect():
     global selector_returned
 
-    if not selector_returned:
-        selector_returned = MockSelector()
+    selector_returned = MockSelector()
     return selector_returned
 
 
@@ -260,6 +258,190 @@ class TestRouteCheck(object):
                 "", ["50.0.0.1/32", "2001:db8::1/128", "10.0.0.0/24"])
 
         assert routes == ["10.0.0.0/24"]
+
+    def test_subscriber_wait_collects_later_updates(self):
+        now = [0.0]
+        selector = MagicMock()
+        subscriber = MagicMock()
+        route = (
+            'SAI_OBJECT_TYPE_ROUTE_ENTRY:{"dest":"192.0.2.0/24",'
+            '"switch_id":"oid:0x1","vr":"oid:0x2"}'
+        )
+        pending = []
+
+        def select(timeout):
+            if selector.select.call_count > 1:
+                pending.extend([(route, OP_SET, []), ("", "", [])])
+            now[0] += 0.4 if timeout > 400 else timeout / 1000.0
+
+        def pop():
+            return pending.pop(0) if pending else ("", "", [])
+
+        selector.select.side_effect = select
+        subscriber.pop.side_effect = pop
+        with patch("route_check.time.monotonic", side_effect=lambda: now[0]):
+            adds, deletes = route_check.get_subscribe_updates(selector, subscriber)
+
+        assert selector.select.call_args_list[0].args == (1000,)
+        assert selector.select.call_count == 3
+        assert now[0] == pytest.approx(1.0)
+        assert adds == ["192.0.2.0/24"]
+        assert deletes == []
+
+    def test_subscriber_wait_is_bounded_with_continuous_updates(self):
+        now = [0.0]
+        selector = MagicMock()
+        subscriber = MagicMock()
+        route = 'SAI_OBJECT_TYPE_ROUTE_ENTRY:{"dest":"192.0.2.0/24"}'
+
+        def pop():
+            now[0] += 0.25
+            return route, OP_DEL, []
+
+        subscriber.pop.side_effect = pop
+        with patch("route_check.time.monotonic", side_effect=lambda: now[0]):
+            adds, deletes = route_check.get_subscribe_updates(selector, subscriber)
+
+        assert now[0] == 1
+        assert subscriber.pop.call_count == 4
+        assert adds == []
+        assert deletes == ["192.0.2.0/24"] * 4
+
+    @pytest.mark.parametrize("second, expected", [
+        ({}, {}),
+        ({"missed_ROUTE_TABLE_routes": ["192.0.2.0/24"]},
+         {"missed_ROUTE_TABLE_routes": ["192.0.2.0/24"]}),
+        ({"missed_ROUTE_TABLE_routes": ["198.51.100.0/24"]}, {}),
+        ({"Unaccounted_ROUTE_ENTRY_TABLE_entries": ["192.0.2.0/24"]}, {}),
+    ])
+    @pytest.mark.parametrize("namespace", ["", "asic1"])
+    def test_confirms_same_database_mismatch(self, namespace, second, expected):
+        first = {"missed_ROUTE_TABLE_routes": ["192.0.2.0/24"]}
+        with patch("route_check.get_route_db_mismatches",
+                   side_effect=[(first, [], [], []), (second, [], [], [])]) as compare, \
+                patch("route_check.check_frr_pending_routes", return_value=([], [])) as frr, \
+                patch("route_check.time.sleep") as sleep:
+            result, _, _ = route_check.check_routes_for_namespace(namespace)
+
+        assert result == expected
+        assert compare.call_args_list == [call(namespace), call(namespace)]
+        frr.assert_called_once_with(namespace)
+        sleep.assert_called_once_with(2)
+
+    def test_no_confirmation_for_clean_scan(self):
+        first = {}
+        with patch("route_check.get_route_db_mismatches",
+                   return_value=(first, [], [], [])) as compare, \
+                patch("route_check.check_frr_pending_routes", return_value=([], [])), \
+                patch("route_check.time.sleep") as sleep:
+            result, _, _ = route_check.check_routes_for_namespace("asic1")
+
+        assert result == first
+        compare.assert_called_once_with("asic1")
+        sleep.assert_not_called()
+
+    def test_confirmation_does_not_repeat_or_suppress_frr_failure(self):
+        first = {"missed_ROUTE_TABLE_routes": ["192.0.2.0/24"]}
+        with patch("route_check.get_route_db_mismatches",
+                   side_effect=[(first, [], [], []), ({}, [], [], [])]), \
+                patch("route_check.check_frr_pending_routes",
+                      return_value=([], ["198.51.100.0/24"])) as frr, \
+                patch("route_check.time.sleep"):
+            result, _, _ = route_check.check_routes_for_namespace("asic1")
+
+        assert result == {"failed_FRR_routes": ["198.51.100.0/24"]}
+        frr.assert_called_once_with("asic1")
+
+    @pytest.mark.parametrize("latest, should_mitigate", [
+        ({"missed_ROUTE_TABLE_routes": ["198.51.100.0/24"]}, False),
+        ({"Unaccounted_ROUTE_ENTRY_TABLE_entries": ["198.51.100.0/24"]}, False),
+        ({}, True),
+    ])
+    def test_confirmation_mitigation_uses_latest_database_state(self, latest, should_mitigate):
+        first = {"missed_ROUTE_TABLE_routes": ["192.0.2.0/24"]}
+        frr_missing = [{"prefix": "198.51.100.0/24", "protocol": "bgp"}]
+        with patch("route_check.get_route_db_mismatches", side_effect=[
+                (first, [], [], ["192.0.2.0/24"]),
+                (latest, [], [], ["198.51.100.0/24"]),
+             ]), \
+                patch("route_check.check_frr_pending_routes", return_value=(frr_missing, [])) as frr, \
+                patch("route_check.is_suppress_fib_pending_enabled", return_value=True), \
+                patch("route_check.mitigate_installed_not_offloaded_frr_routes") as mitigate, \
+                patch("route_check.time.sleep"):
+            result, _, _ = route_check.check_routes_for_namespace("asic1")
+
+        assert result == {"missed_FRR_routes": frr_missing}
+        frr.assert_called_once_with("asic1")
+        if should_mitigate:
+            mitigate.assert_called_once_with("asic1", frr_missing, ["198.51.100.0/24"])
+        else:
+            mitigate.assert_not_called()
+
+    def test_confirmation_keeps_namespaces_separate(self):
+        mismatch = {"missed_ROUTE_TABLE_routes": ["192.0.2.0/24"]}
+        samples = {
+            "asic0": iter([(mismatch, [], [], []), ({}, [], [], [])]),
+            "asic1": iter([
+                ({"missed_ROUTE_TABLE_routes": ["198.51.100.0/24"]}, [], [], []),
+                (mismatch, [], [], []),
+            ]),
+        }
+
+        def compare(namespace):
+            return next(samples[namespace])
+
+        with patch("route_check.get_route_db_mismatches", side_effect=compare), \
+                patch("route_check.check_frr_pending_routes", return_value=([], [])), \
+                patch("route_check.multi_asic.get_namespace_list", return_value=["asic0", "asic1"]), \
+                patch("route_check.time.sleep"):
+            ret, results = route_check.check_routes(route_check.multi_asic.DEFAULT_NAMESPACE)
+
+        assert (ret, results) == (0, None)
+
+    def test_confirmation_reads_fresh_database_snapshots(self):
+        config_db = MagicMock()
+        config_db.get_entry.return_value = {}
+        config_db.get_table.return_value = {}
+        first_selector, second_selector = MagicMock(), MagicMock()
+        first_subscriber, second_subscriber = MagicMock(), MagicMock()
+        with patch("route_check.get_asicdb_routes", side_effect=[
+                (first_selector, first_subscriber, []),
+                (second_selector, second_subscriber, ["192.0.2.0/24"]),
+             ]) as asic, \
+                patch("route_check.get_appdb_routes", return_value=["192.0.2.0/24"]) as appl, \
+                patch("route_check.get_interfaces", return_value=[]), \
+                patch("route_check.filter_out_vnet_routes", side_effect=lambda ns, routes: routes), \
+                patch("route_check.filter_out_standalone_tunnel_routes", side_effect=lambda ns, routes: routes), \
+                patch("route_check.filter_out_soc_ip_routes", side_effect=lambda ns, routes: routes), \
+                patch("route_check.filter_out_local_interfaces", side_effect=lambda ns, routes: routes), \
+                patch("route_check.filter_out_voq_neigh_routes", side_effect=lambda ns, routes: routes), \
+                patch("route_check.filter_out_local_p2p_ips", side_effect=lambda ns, routes: routes), \
+                patch("route_check.filter_out_vlan_neigh_route_miss",
+                      side_effect=lambda ns, missing, extra: (missing, extra)), \
+                patch("route_check.get_subscribe_updates", return_value=([], [])), \
+                patch("route_check.check_frr_pending_routes", return_value=([], [])) as frr, \
+                patch("route_check.multi_asic.connect_config_db_for_ns", return_value=config_db), \
+                patch("route_check.time.sleep"):
+            result, _, _ = route_check.check_routes_for_namespace("asic1")
+
+        assert result == {}
+        assert asic.call_args_list == [call("asic1"), call("asic1")]
+        assert appl.call_args_list == [call("asic1"), call("asic1")]
+        frr.assert_called_once_with("asic1")
+
+    @pytest.mark.parametrize("error", [RuntimeError("database read failed"), TimeoutError("deadline")])
+    def test_confirmation_errors_remain_failures(self, error):
+        first = {"missed_ROUTE_TABLE_routes": ["192.0.2.0/24"]}
+        with patch("route_check.get_route_db_mismatches",
+                   side_effect=[(first, [], [], []), error]), \
+                patch("route_check.check_frr_pending_routes", return_value=([], [])), \
+                patch("route_check.multi_asic.get_namespace_list", return_value=["asic1"]), \
+                patch("route_check.time.sleep"), \
+                patch("route_check.print_message") as log:
+            ret, _ = route_check.check_routes("asic1")
+
+        assert ret == -1
+        assert any("Error processing namespace asic1" in str(c) for c in log.call_args_list)
 
     @pytest.mark.parametrize("test_num", TEST_DATA.keys())
     def test_route_check(self, mock_dbs, test_num):
