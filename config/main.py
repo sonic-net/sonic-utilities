@@ -3138,8 +3138,12 @@ def portchannel(db, ctx, namespace):
 @click.option('--fast-rate', default='false',
               type=click.Choice(['true', 'false'],
                                 case_sensitive=False))
+@click.option('--lacp-mode', default='active', show_default=True,
+              type=click.Choice(['active', 'passive'],
+                                case_sensitive=False),
+              help="LACP activity mode.")
 @click.pass_context
-def add_portchannel(ctx, portchannel_name, min_links, fallback, fast_rate):
+def add_portchannel(ctx, portchannel_name, min_links, fallback, fast_rate, lacp_mode):
     """Add port channel"""
 
     fvs = {
@@ -3147,6 +3151,7 @@ def add_portchannel(ctx, portchannel_name, min_links, fallback, fast_rate):
         'mtu': '9100',
         'lacp_key': 'auto',
         'fast_rate': fast_rate.lower(),
+        'active': 'true' if lacp_mode.lower() == 'active' else 'false',
     }
 
     if min_links != 0:
