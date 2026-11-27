@@ -705,10 +705,7 @@ configDbJson = {
     "VLAN": {
         "Vlan100": {
             "admin_status": "up",
-            "description": "server_vlan",
-            "dhcp_servers": [
-                "10.186.72.116"
-            ]
+            "description": "server_vlan"
         },
     },
     "VLAN_MEMBER": {
@@ -841,10 +838,7 @@ portBreakOutConfigDbJson = {
     "VLAN": {
         "Vlan100": {
             "admin_status": "up",
-            "description": "server_vlan",
-            "dhcp_servers": [
-                "10.186.72.116"
-            ]
+            "description": "server_vlan"
         }
     },
     "VLAN_MEMBER": {

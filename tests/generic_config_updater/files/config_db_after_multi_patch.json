@@ -30,6 +30,10 @@
             ]
         }
     },
+    "VLAN_INTERFACE": {
+        "Vlan1000": {},
+        "Vlan1000|192.168.0.1/21": {}
+    },
     "ACL_TABLE": {
         "NO-NSW-PACL-V4": {
             "type": "L3",

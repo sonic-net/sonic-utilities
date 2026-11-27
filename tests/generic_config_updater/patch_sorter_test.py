@@ -1441,6 +1441,10 @@ class TestNoDependencyMoveValidator(unittest.TestCase):
                         "192.0.0.2"
                     ]
                 }
+            },
+            "VLAN_INTERFACE": {
+                "Vlan100": {},
+                "Vlan100|192.168.100.1/24": {}
             }
         }
         target_config = {
@@ -1451,6 +1455,10 @@ class TestNoDependencyMoveValidator(unittest.TestCase):
                         "192.0.0.3"
                     ]
                 }
+            },
+            "VLAN_INTERFACE": {
+                "Vlan100": {},
+                "Vlan100|192.168.100.1/24": {}
             }
         }
         diff = ps.Diff(current_config, target_config)
