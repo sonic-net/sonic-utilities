@@ -454,8 +454,9 @@ This command lists all the possible configuration commands at the top level.
     interface_naming_mode  Modify interface naming mode for interacting...
     kubernetes             Kubernetes server related configuration
     load                   Import a previous saved config DB dump file.
+    load_golden_config     Load complete golden configuration without...
     load_mgmt_config       Reconfigure hostname and mgmt interface based...
-    load_minigraph         Reconfigure based on minigraph.
+    load_minigraph         Deprecated compatibility path using minigraph.
     loopback               Loopback-related configuration tasks.
     mirror_session
     nat                    NAT-related configuration tasks
@@ -9371,9 +9372,46 @@ If the argument is not specified, it prompts the user to confirm whether user re
   Running command: /usr/local/bin/sonic-cfggen -j /etc/sonic/config_db.json --write-to-db
   ```
 
+### Loading complete golden configuration without minigraph
+
+**config load_golden_config**
+
+This command validates and loads a complete golden CONFIG_DB file without reading or parsing
+`/etc/sonic/minigraph.xml`, even when the legacy file is present. The default input is
+`/etc/sonic/golden_config_db.json`.
+
+The golden file must contain all persistent desired configuration, including the required
+`DEVICE_METADATA.localhost` fields and complete coverage of `/etc/sonic/init_cfg.json`.
+The current implementation supports standalone single-ASIC and single-host namespace multi-ASIC
+NPU systems. Distributed chassis and other device-role profiles are rejected.
+Before changing CONFIG_DB, the command snapshots both input files and verifies the candidate
+platform, system MAC, and locally available HWSKU against local device identity. Validation,
+CONFIG_DB loading, and database migration use those same snapshots; migration uses the golden
+snapshot as its only configuration source.
+
+Use `--check-only` to validate the file without changing CONFIG_DB. Use `--migrate-only` for
+the golden-native warm image-migration path: it quiesces Redis writers, preloads any selected
+cold namespaces, migrates every scope, sets the initialization indicators, transactionally persists
+the complete CONFIG_DB generation, and then restarts services before committing.
+
+For a normal reload, `--persist` writes every host and namespace CONFIG_DB file inside the same
+generation transaction before services restart. Golden-native mutation requires service
+quiescence, so `-n` is rejected unless the command is validation-only. The `-f` option bypasses
+normal system-readiness checks.
+
+- Usage:
+  ```
+  config load_golden_config [-y|--yes] [-n|--no_service_restart] [-f|--force]
+                            [--check-only | --migrate-only] [--persist] [<filename>]
+  ```
+
 ### Loading configuration from minigraph (XML) file
 
 **config load_minigraph**
+
+This command is deprecated and retained only as a compatibility and rollback path while
+existing provisioning callers migrate to `config load_golden_config`. New provisioning
+workflows should not use it.
 
 This command is used to load the configuration from /etc/sonic/minigraph.xml.
 When users do not want to use configuration from config_db.json, they can copy the minigraph.xml configuration file to the device and load it using this command.

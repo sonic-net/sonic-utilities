@@ -23,6 +23,7 @@ from click.testing import CliRunner
 from sonic_py_common import device_info, multi_asic
 from utilities_common import flock
 from utilities_common.db import Db
+from utilities_common.generation_transaction import GenerationCleanupError, GenerationRollbackError
 from utilities_common.general import load_module_from_source
 from mock import call, patch, mock_open, MagicMock
 
@@ -1061,6 +1062,2988 @@ class TestConfigReload(object):
         dbconnector.load_namespace_config()
 
 
+class TestLoadGoldenConfig(object):
+    class _RecordingGenerationTransaction(object):
+        def __init__(self, namespaces, persistent_files, events):
+            self.namespaces = tuple(namespaces)
+            self.persistent_files = tuple(persistent_files)
+            self.events = events
+            self.commit_error = None
+            self.rollback_error = None
+            self.evidence_directory = "/tmp/recording-generation"
+            self.evidence_parent = "{}-{}".format(
+                self.evidence_directory,
+                id(self),
+            )
+            self.database_adapter = None
+
+        def begin(self, service_quiescence=None, service_recovery=None):
+            self.events.append("begin")
+            if service_quiescence is not None:
+                service_quiescence()
+
+        def mark_service_recovery_complete(self):
+            pass
+
+        def mark_scope_touched(self, namespace):
+            self.events.append(("mark_scope", namespace))
+
+        def mark_shared_databases_touched(self):
+            self.events.append("mark_shared_databases")
+
+        def mark_persistent_file_touched(self, path):
+            self.events.append(("mark_persistent_file", path))
+
+        def commit(self):
+            self.events.append("commit")
+            if self.commit_error is not None:
+                raise self.commit_error
+
+        def rollback(
+                self, original_error, service_quiescence=None,
+                service_recovery=None):
+            self.events.append(("rollback", original_error))
+            if service_quiescence is not None:
+                self.events.append("service_quiescence")
+                service_quiescence()
+            if service_recovery is not None:
+                self.events.append("service_recovery")
+                service_recovery()
+            if self.rollback_error is not None:
+                raise self.rollback_error
+
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "1"
+        import config.main
+        importlib.reload(config.main)
+
+    @staticmethod
+    def _write_json(filename, data):
+        with open(filename, 'w') as config_file:
+            json.dump(data, config_file)
+
+    @staticmethod
+    def _valid_init_config():
+        return {
+            "FEATURE": {
+                "bgp": {
+                    "state": "enabled"
+                }
+            }
+        }
+
+    @staticmethod
+    def _valid_hardware_config():
+        return {
+            "PORT": {
+                "Ethernet0": {
+                    "alias": "Ethernet0",
+                    "index": "0",
+                    "lanes": "1,2,3,4",
+                    "speed": "100000"
+                }
+            }
+        }
+
+    @staticmethod
+    def _valid_golden_config():
+        return {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "platform": "x86_64-kvm_x86_64-r0",
+                    "mac": "00:01:02:03:04:05",
+                    "hwsku": "Force10-S6000",
+                    "hostname": "sonic",
+                    "type": "ToRRouter"
+                }
+            },
+            "FEATURE": {
+                "bgp": {
+                    "state": "enabled"
+                }
+            },
+            **TestLoadGoldenConfig._valid_hardware_config()
+        }
+
+    @classmethod
+    def _valid_multiasic_golden_config(cls):
+        config_data = {
+            "localhost": cls._valid_golden_config()
+        }
+        namespace_metadata = {
+            "asic0": {
+                "asic_id": "01.00.0",
+                "mac": "02:42:f0:7f:01:05",
+            },
+            "asic1": {
+                "mac": "02:42:f0:7f:01:06",
+            },
+        }
+        for namespace in ("asic0", "asic1"):
+            scope_config = cls._valid_golden_config()
+            scope_config["DEVICE_METADATA"]["localhost"].update({
+                "asic_name": namespace,
+                "hostname": "sonic",
+                "hwsku": "multi_asic",
+                "mac": namespace_metadata[namespace]["mac"],
+                "platform": "multi_asic",
+            })
+            if "asic_id" in namespace_metadata[namespace]:
+                scope_config["DEVICE_METADATA"]["localhost"]["asic_id"] = \
+                    namespace_metadata[namespace]["asic_id"]
+            config_data[namespace] = scope_config
+        return config_data
+
+    @staticmethod
+    def _support(config, profile, switch_type="npu", num_asics=1,
+                 namespaces=(), supervisor=False, chassis=False,
+                 dpu=False, smartswitch=False, chassis_scope=False,
+                 trusted_device_type="ToRRouter"):
+        return config.GoldenNativeSupport(
+            profile=profile,
+            switch_type=switch_type,
+            num_asics=num_asics,
+            namespaces=tuple(namespaces),
+            hostname="sonic",
+            platform="x86_64-kvm_x86_64-r0",
+            hwsku="Force10-S6000",
+            mac="00:01:02:03:04:05",
+            trusted_device_type=trusted_device_type,
+            is_supervisor=supervisor,
+            is_chassis=chassis,
+            is_dpu=dpu,
+            is_smartswitch=smartswitch,
+            has_chassis_scope=chassis_scope
+        )
+
+    @classmethod
+    def _profile_golden_config(cls, config, profile, switch_type="npu"):
+        golden_config = cls._valid_golden_config()
+        metadata = golden_config["DEVICE_METADATA"]["localhost"]
+
+        if switch_type != "npu":
+            metadata["switch_type"] = switch_type
+
+        if profile == "voq_linecard":
+            golden_config["SYSTEM_PORT"] = {
+                "Ethernet0": {
+                    "hostname": "sonic",
+                    "asic_name": "asic0",
+                    "speed": "100000",
+                    "switch_id": "0",
+                    "core_index": "0",
+                    "core_port_index": "0",
+                    "num_voq": "8"
+                }
+            }
+        elif profile == "smartswitch_host":
+            metadata["subtype"] = "SmartSwitch"
+            golden_config["DPUS"] = {"dpu0": {"midplane_interface": "dpu0"}}
+            golden_config["CHASSIS_MODULE"] = {
+                "DPU0": {"admin_status": "up"}
+            }
+            golden_config["DPU"] = {"dpu0": {"state": "up"}}
+        elif profile == "dpu":
+            metadata.update({
+                "type": "SmartSwitchDPU",
+                "subtype": "SmartSwitch"
+            })
+
+        return golden_config
+
+    @pytest.fixture(autouse=True)
+    def _mock_hardware_config(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        with mock.patch.object(
+                config,
+                "_read_hardware_config",
+                return_value=self._valid_hardware_config()), \
+                mock.patch.object(
+                    config.device_info,
+                    "get_hostname",
+                    return_value="sonic"), \
+                mock.patch.object(
+                    config.device_info,
+                    "get_platform",
+                    return_value="x86_64-kvm_x86_64-r0"), \
+                mock.patch.object(
+                    config.device_info,
+                    "get_hwsku",
+                    return_value="Force10-S6000"), \
+                mock.patch.object(
+                    config.device_info,
+                    "get_system_mac",
+                    return_value="00:01:02:03:04:05"), \
+                mock.patch.object(
+                    config.device_info,
+                    "get_num_npus",
+                    side_effect=lambda: (
+                        len(config.multi_asic.get_namespace_list())
+                        if config.multi_asic.is_multi_asic()
+                        else 1
+                    )), \
+                mock.patch.object(
+                    config.device_info,
+                    "is_multi_npu",
+                    side_effect=lambda: config.multi_asic.is_multi_asic()), \
+                mock.patch.object(
+                    config.device_info,
+                    "is_supervisor",
+                    return_value=False), \
+                mock.patch.object(
+                    config.device_info,
+                    "is_chassis",
+                    return_value=False), \
+                mock.patch.object(
+                    config.device_info,
+                    "is_dpu",
+                    return_value=False), \
+                mock.patch.object(
+                    config.device_info,
+                    "is_smartswitch",
+                    return_value=False), \
+                mock.patch.object(
+                    config.multi_asic,
+                    "is_multi_asic",
+                    return_value=False), \
+                mock.patch.object(
+                    config.multi_asic,
+                    "get_namespace_list",
+                    return_value=[config.DEFAULT_NAMESPACE]), \
+                mock.patch.object(
+                    config,
+                    "_golden_native_chassis_scope_present",
+                    return_value=False), \
+                mock.patch.object(
+                    config,
+                    "_read_trusted_golden_native_device_metadata",
+                    return_value={"type": "ToRRouter"}):
+            yield
+
+    @pytest.fixture(autouse=True)
+    def _mock_generation_transaction(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        self._generation_transaction_events = []
+        self._generation_transactions = []
+        self._generation_transaction_commit_error = None
+        self._generation_transaction_rollback_error = None
+
+        def new_transaction(support):
+            transaction = self._RecordingGenerationTransaction(
+                support.namespaces,
+                config._golden_native_persistent_config_files(
+                    support.namespaces
+                ),
+                self._generation_transaction_events,
+            )
+            transaction.commit_error = self._generation_transaction_commit_error
+            transaction.rollback_error = self._generation_transaction_rollback_error
+            self._generation_transactions.append(transaction)
+            return transaction
+
+        with mock.patch.object(
+                config,
+                "_new_golden_native_generation_transaction",
+                side_effect=new_transaction):
+            yield
+
+    @pytest.fixture(autouse=True)
+    def _mock_generation_runtime(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        with mock.patch.object(config, "_stop_services"), \
+                mock.patch.object(config, "_reset_failed_services"), \
+                mock.patch.object(config, "update_sonic_environment"), \
+                mock.patch.object(config, "_restart_services"), \
+                mock.patch.object(
+                    config, "_set_generation_config_db_initialized"), \
+                mock.patch.object(
+                    config, "_persist_generation_config_files"):
+            yield
+
+    def _new_recording_transaction(self, config):
+        return self._RecordingGenerationTransaction(
+            [config.DEFAULT_NAMESPACE, "asic0", "asic1"],
+            config._golden_native_persistent_config_files(
+                [config.DEFAULT_NAMESPACE, "asic0", "asic1"]
+            ),
+            self._generation_transaction_events,
+        )
+
+    def _invoke_real_single_asic_reload(
+            self, config, run_command_error=None, reset_results=None,
+            environment_results=None, restart_results=None, arguments=None):
+        runner = CliRunner()
+        db = Db()
+        service_calls = []
+        arguments = list(arguments) if arguments is not None else [
+            "-y", "-f", "-b", "golden_config.json"
+        ]
+        reset_results = list(reset_results or [])
+        environment_results = list(environment_results or [])
+        restart_results = list(restart_results or [])
+        mock_swsscommon = mock.MagicMock()
+        mock_swsscommon.RestartWaiter.isFastBootInProgress.return_value = False
+        mock_swsscommon.RestartWaiter.isWarmBootInProgress.return_value = False
+        client = mock.MagicMock()
+        config_db = mock.MagicMock()
+        config_db.INIT_INDICATOR = "CONFIG_DB_INITIALIZED"
+
+        def record_service_call(name):
+            service_calls.append(name)
+            self._generation_transaction_events.append(("service", name))
+
+        def run_command(*_args, **_kwargs):
+            if run_command_error is not None:
+                raise run_command_error
+
+        def restart_services():
+            record_service_call("restart")
+            if restart_results:
+                result = restart_results.pop(0)
+                if isinstance(result, BaseException):
+                    raise result
+
+        def reset_services():
+            record_service_call("reset")
+            if reset_results:
+                result = reset_results.pop(0)
+                if isinstance(result, BaseException):
+                    raise result
+
+        def prepare_environment():
+            record_service_call("environment")
+            if environment_results:
+                result = environment_results.pop(0)
+                if isinstance(result, BaseException):
+                    raise result
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", self._valid_golden_config())
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                        config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(
+                        config,
+                        "_config_scopes_yang_validation",
+                        return_value=True), \
+                    mock.patch.object(
+                        config,
+                        "config_file_yang_validation",
+                        return_value=True), \
+                    mock.patch.object(
+                        config, "load_sysinfo_if_missing", return_value=False), \
+                    mock.patch.object(config, "swsscommon", mock_swsscommon), \
+                    mock.patch.object(
+                        config, "flush_configdb",
+                        return_value=(client, config_db)), \
+                    mock.patch.object(config, "delete_transceiver_tables"), \
+                    mock.patch.object(config, "delete_bgp_peer_table"), \
+                    mock.patch.object(config, "migrate_db_to_lastest"), \
+                    mock.patch.object(
+                        config,
+                        "update_sonic_environment",
+                        side_effect=prepare_environment), \
+                    mock.patch.object(
+                        config.clicommon,
+                        "run_command",
+                        side_effect=run_command), \
+                    mock.patch.object(
+                        config,
+                        "_stop_services",
+                        side_effect=lambda: record_service_call("stop")), \
+                    mock.patch.object(
+                        config,
+                        "_reset_failed_services",
+                        side_effect=reset_services), \
+                    mock.patch.object(
+                        config,
+                        "_restart_services",
+                        side_effect=restart_services):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    arguments,
+                    obj={"config_db": db.cfgdb}
+                )
+
+        return result, service_calls
+
+    def test_check_only_validates_without_reloading(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", self._valid_golden_config())
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "_config_scopes_yang_validation", return_value=True), \
+                    mock.patch.object(config, "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+            assert result.exit_code == 0
+            assert "Golden config validation succeeded." in result.output
+            mock_reload.assert_not_called()
+
+    def test_check_only_and_migrate_only_are_mutually_exclusive(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False):
+            result = runner.invoke(
+                config.config.commands["load_golden_config"],
+                ["--check-only", "--migrate-only", "-b", "golden_config.json"]
+            )
+
+        assert result.exit_code == 2
+        assert "--check-only and --migrate-only cannot be used together" in result.output
+
+    @pytest.mark.parametrize(
+        "trusted_metadata, role_flags, expected_profile, expected_switch_type",
+        [
+            ({"type": "ToRRouter"}, {}, "standalone_npu", "npu"),
+            (
+                {"type": "ToRRouter", "switch_type": "voq"},
+                {"is_chassis": True, "chassis_scope": True},
+                "voq_linecard",
+                "voq"
+            ),
+            (
+                {"type": "ToRRouter", "switch_type": "chassis-packet"},
+                {"is_chassis": True, "chassis_scope": True},
+                "packet_linecard",
+                "chassis-packet"
+            ),
+            (
+                {"type": "ToRRouter", "switch_type": "npu"},
+                {
+                    "is_supervisor": True,
+                    "is_chassis": True,
+                    "chassis_scope": True
+                },
+                "supervisor",
+                "npu"
+            ),
+            (
+                {"type": "ToRRouter", "switch_type": "fabric"},
+                {
+                    "is_supervisor": True,
+                    "is_chassis": True,
+                    "chassis_scope": True
+                },
+                "supervisor",
+                "fabric"
+            ),
+            (
+                {"type": "ToRRouter", "switch_type": "fabric"},
+                {"is_chassis": True, "chassis_scope": True},
+                "fabric_card",
+                "fabric"
+            ),
+            (
+                {"type": "ToRRouter", "subtype": "SmartSwitch"},
+                {"is_smartswitch": True},
+                "smartswitch_host",
+                "npu"
+            ),
+            (
+                {"type": "SmartSwitchDPU", "switch_type": "dpu"},
+                {"is_dpu": True},
+                "dpu",
+                "dpu"
+            )
+        ]
+    )
+    def test_trusted_profile_resolution(
+            self, get_cmd_module, trusted_metadata, role_flags,
+            expected_profile, expected_switch_type):
+        (config, _) = get_cmd_module
+
+        switch_type = config._normalize_golden_native_switch_type(
+            trusted_metadata.get("switch_type")
+        )
+        profile = config._resolve_golden_native_profile(
+            switch_type,
+            role_flags.get("is_supervisor", False),
+            role_flags.get("is_chassis", False),
+            role_flags.get("is_dpu", False),
+            role_flags.get("is_smartswitch", False),
+            role_flags.get("chassis_scope", False)
+        )
+
+        assert profile == expected_profile
+        assert switch_type == expected_switch_type
+
+    @pytest.mark.parametrize(
+        "trusted_metadata, role_flags, expected_error",
+        [
+            (
+                {"switch_type": "unsupported-role"},
+                {},
+                "unsupported trusted switch_type 'unsupported-role'"
+            ),
+            (
+                {"switch_type": "voq"},
+                {},
+                "voq switch_type requires trusted chassis scope"
+            ),
+            (
+                {"switch_type": "dpu"},
+                {"is_dpu": True, "is_chassis": True},
+                "DPU role conflicts with chassis role signals"
+            ),
+            (
+                {"subtype": "SmartSwitch"},
+                {"is_smartswitch": True, "is_chassis": True},
+                "SmartSwitch host role conflicts with chassis role signals"
+            ),
+            (
+                {"switch_type": "voq"},
+                {"is_supervisor": True, "is_chassis": True},
+                "supervisor role conflicts with trusted switch_type 'voq'"
+            )
+        ]
+    )
+    def test_trusted_profile_conflicts_fail_closed(
+            self, get_cmd_module, trusted_metadata, role_flags,
+            expected_error):
+        (config, _) = get_cmd_module
+
+        switch_type = config._normalize_golden_native_switch_type(
+            trusted_metadata.get("switch_type")
+        )
+        with pytest.raises(ValueError) as error:
+            config._resolve_golden_native_profile(
+                switch_type,
+                role_flags.get("is_supervisor", False),
+                role_flags.get("is_chassis", False),
+                role_flags.get("is_dpu", False),
+                role_flags.get("is_smartswitch", False),
+                role_flags.get("chassis_scope", False)
+            )
+
+        assert expected_error in str(error.value)
+
+    @pytest.mark.parametrize(
+        "trusted_metadata, role_flags, expected_profile",
+        [
+            (
+                {"type": "ToRRouter", "switch_type": "voq"},
+                {"is_chassis": True, "chassis_scope": True},
+                "voq_linecard"
+            ),
+            (
+                {"type": "ToRRouter", "switch_type": "chassis-packet"},
+                {"is_chassis": True, "chassis_scope": True},
+                "packet_linecard"
+            ),
+            (
+                {"type": "ToRRouter", "switch_type": "npu"},
+                {
+                    "is_supervisor": True,
+                    "is_chassis": True,
+                    "chassis_scope": True
+                },
+                "supervisor"
+            ),
+            (
+                {"type": "ToRRouter", "switch_type": "fabric"},
+                {"is_chassis": True, "chassis_scope": True},
+                "fabric_card"
+            ),
+            (
+                {"type": "ToRRouter", "subtype": "SmartSwitch"},
+                {"is_smartswitch": True},
+                "smartswitch_host"
+            ),
+            (
+                {"type": "SmartSwitchDPU", "switch_type": "dpu"},
+                {"is_dpu": True},
+                "dpu"
+            )
+        ]
+    )
+    def test_recognized_unsupported_profile_fails_before_file_io(
+            self, get_cmd_module, trusted_metadata, role_flags,
+            expected_profile):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with mock.patch.object(
+                config,
+                "_read_trusted_golden_native_device_metadata",
+                return_value=trusted_metadata), \
+                mock.patch.object(
+                    config.device_info,
+                    "is_supervisor",
+                    return_value=role_flags.get("is_supervisor", False)), \
+                mock.patch.object(
+                    config.device_info,
+                    "is_chassis",
+                    return_value=role_flags.get("is_chassis", False)), \
+                mock.patch.object(
+                    config.device_info,
+                    "is_dpu",
+                    return_value=role_flags.get("is_dpu", False)), \
+                mock.patch.object(
+                    config.device_info,
+                    "is_smartswitch",
+                    return_value=role_flags.get("is_smartswitch", False)), \
+                mock.patch.object(
+                    config,
+                    "_golden_native_chassis_scope_present",
+                    return_value=role_flags.get("chassis_scope", False)), \
+                mock.patch.object(
+                    config,
+                    "_snapshot_golden_native_config") as mock_gold_snapshot, \
+                mock.patch.object(
+                    config,
+                    "_snapshot_golden_native_init_config") as mock_init_snapshot:
+            result = runner.invoke(
+                config.config.commands["load_golden_config"],
+                ["--check-only", "-b", "golden_config.json"]
+            )
+
+        assert result.exit_code != 0
+        assert (
+            "trusted profile '{}' is unsupported".format(expected_profile)
+            in result.output
+        )
+        mock_gold_snapshot.assert_not_called()
+        mock_init_snapshot.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "profile, switch_type, role_flags",
+        [
+            ("standalone_npu", "npu", {}),
+            ("voq_linecard", "voq", {"chassis": True}),
+            ("packet_linecard", "chassis-packet", {"chassis": True}),
+            (
+                "supervisor",
+                "npu",
+                {"supervisor": True, "chassis": True}
+            ),
+            (
+                "supervisor",
+                "fabric",
+                {"supervisor": True, "chassis": True}
+            ),
+            ("fabric_card", "fabric", {"chassis": True}),
+            ("smartswitch_host", "npu", {"smartswitch": True}),
+            ("dpu", "dpu", {"dpu": True})
+        ]
+    )
+    def test_supported_profile_validates_complete_gold(
+            self, get_cmd_module, profile, switch_type, role_flags):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        support = self._support(
+            config,
+            profile,
+            switch_type=switch_type,
+            supervisor=role_flags.get("supervisor", False),
+            chassis=role_flags.get("chassis", False),
+            dpu=role_flags.get("dpu", False),
+            smartswitch=role_flags.get("smartswitch", False),
+            chassis_scope=role_flags.get("chassis", False),
+            trusted_device_type=(
+                "SmartSwitchDPU" if profile == "dpu" else "ToRRouter"
+            )
+        )
+        golden_config = self._profile_golden_config(
+            config, profile, switch_type
+        )
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                        config,
+                        "_validate_golden_native_platform_support",
+                        return_value=support), \
+                    mock.patch.object(
+                        config,
+                        "_config_scopes_yang_validation",
+                        return_value=True), \
+                    mock.patch.object(
+                        config,
+                        "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code == 0
+        assert "Golden config validation succeeded." in result.output
+        mock_reload.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "malformed_metadata, expected_error",
+        [
+            (
+                [],
+                "Golden config scope 'localhost' table DEVICE_METADATA must "
+                "contain a JSON object."
+            ),
+            (
+                {"localhost": []},
+                "Golden config scope 'localhost' DEVICE_METADATA.localhost "
+                "must contain a JSON object."
+            )
+        ]
+    )
+    def test_malformed_device_metadata_fails_before_yang_validation(
+            self, get_cmd_module, malformed_metadata, expected_error):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        support = self._support(config, "standalone_npu")
+        golden_config = self._valid_golden_config()
+        golden_config["DEVICE_METADATA"] = malformed_metadata
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                        config,
+                        "_validate_golden_native_platform_support",
+                        return_value=support), \
+                    mock.patch.object(
+                        config,
+                        "_config_scopes_yang_validation",
+                        return_value=True) as mock_yang, \
+                    mock.patch.object(
+                        config,
+                        "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert expected_error in result.output
+        mock_yang.assert_not_called()
+        mock_reload.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "arguments",
+        [
+            ["-y", "-b", "golden_config.json"],
+            ["-y", "--migrate-only", "-b", "golden_config.json"]
+        ]
+    )
+    def test_mismatched_host_device_type_fails_before_yang_or_mutation(
+            self, get_cmd_module, arguments):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_golden_config()
+        golden_config["DEVICE_METADATA"]["localhost"]["type"] = "SpineRouter"
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                        config,
+                        "_config_scopes_yang_validation",
+                        return_value=True) as mock_yang, \
+                    mock.patch.object(
+                        config,
+                        "migrate_db_to_lastest") as mock_migrate, \
+                    mock.patch.object(
+                        config,
+                        "_invoke_golden_native_reload") as mock_reload, \
+                    mock.patch.object(
+                        config,
+                        "_new_golden_native_generation_transaction"
+                    ) as mock_transaction:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    arguments
+                )
+
+        assert result.exit_code != 0
+        assert (
+            "device type 'SpineRouter' does not match trusted local device "
+            "type 'ToRRouter'"
+        ) in result.output
+        mock_yang.assert_not_called()
+        mock_migrate.assert_not_called()
+        mock_reload.assert_not_called()
+        mock_transaction.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "trusted_metadata",
+        [
+            {},
+            {"type": ""},
+            {"type": None},
+            {"type": 42}
+        ]
+    )
+    def test_invalid_trusted_device_type_fails_before_file_io(
+            self, get_cmd_module, trusted_metadata):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with mock.patch.object(
+                config,
+                "_read_trusted_golden_native_device_metadata",
+                return_value=trusted_metadata), \
+                mock.patch.object(
+                    config,
+                    "_snapshot_golden_native_config") as mock_gold_snapshot, \
+                mock.patch.object(
+                    config,
+                    "_snapshot_golden_native_init_config") as mock_init_snapshot:
+            result = runner.invoke(
+                config.config.commands["load_golden_config"],
+                ["--check-only", "-b", "golden_config.json"]
+            )
+
+        assert result.exit_code != 0
+        assert (
+            "trusted DEVICE_METADATA.localhost.type must be a non-empty "
+            "string"
+        ) in result.output
+        mock_gold_snapshot.assert_not_called()
+        mock_init_snapshot.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "profile, switch_type, missing_table, role_flags",
+        [
+            (
+                "voq_linecard", "voq", "PORT",
+                {"chassis": True}
+            ),
+            (
+                "voq_linecard", "voq", "SYSTEM_PORT",
+                {"chassis": True}
+            ),
+            (
+                "smartswitch_host", "npu", "DPUS",
+                {"smartswitch": True}
+            ),
+            (
+                "smartswitch_host", "npu", "CHASSIS_MODULE",
+                {"smartswitch": True}
+            ),
+            (
+                "smartswitch_host", "npu", "DPU",
+                {"smartswitch": True}
+            ),
+            (
+                "supervisor", "npu", "PORT",
+                {"supervisor": True, "chassis": True}
+            ),
+            (
+                "dpu", "dpu", "PORT",
+                {"dpu": True}
+            )
+        ]
+    )
+    def test_missing_role_required_table_fails_closed(
+            self, get_cmd_module, profile, switch_type, missing_table,
+            role_flags):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        support = self._support(
+            config,
+            profile,
+            switch_type=switch_type,
+            supervisor=role_flags.get("supervisor", False),
+            chassis=role_flags.get("chassis", False),
+            dpu=role_flags.get("dpu", False),
+            smartswitch=role_flags.get("smartswitch", False),
+            chassis_scope=role_flags.get("chassis", False),
+            trusted_device_type=(
+                "SmartSwitchDPU" if profile == "dpu" else "ToRRouter"
+            )
+        )
+        golden_config = self._profile_golden_config(
+            config, profile, switch_type
+        )
+        golden_config.pop(missing_table)
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                        config,
+                        "_validate_golden_native_platform_support",
+                        return_value=support), \
+                    mock.patch.object(
+                        config,
+                        "_config_scopes_yang_validation",
+                        return_value=True), \
+                    mock.patch.object(
+                        config,
+                        "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert (
+            "Golden config scope 'localhost' profile '{}' requires non-empty "
+            "table '{}'.".format(profile, missing_table)
+        ) in result.output
+        mock_reload.assert_not_called()
+
+    def test_ambiguous_trusted_profile_fails_before_file_io(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with mock.patch.object(config.device_info, "is_chassis", return_value=True), \
+                mock.patch.object(
+                    config,
+                    "_golden_native_chassis_scope_present",
+                    return_value=True), \
+                mock.patch.object(config, "_snapshot_golden_native_config") as mock_gold_snapshot, \
+                mock.patch.object(config, "_snapshot_golden_native_init_config") as mock_init_snapshot, \
+                mock.patch.object(config, "_validate_golden_native_config") as mock_validate:
+            result = runner.invoke(
+                config.config.commands["load_golden_config"],
+                ["--check-only", "-b", "golden_config.json"]
+            )
+
+        assert result.exit_code != 0
+        assert (
+            "ambiguous without a supervisor role signal" in
+            result.output
+        )
+        mock_gold_snapshot.assert_not_called()
+        mock_init_snapshot.assert_not_called()
+        mock_validate.assert_not_called()
+
+    def test_trusted_support_is_resolved_once_and_threaded_unchanged(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        support = self._support(
+            config, "standalone_npu"
+        )
+
+        def validate(
+                _snapshot_name, _display_filename, _init_snapshot_name,
+                _init_display_filename, received_support):
+            assert received_support is support
+            return [(config.DEFAULT_NAMESPACE, self._valid_golden_config())]
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", self._valid_golden_config())
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                        config,
+                        "_validate_golden_native_platform_support",
+                        return_value=support) as mock_support, \
+                    mock.patch.object(
+                        config,
+                        "_validate_golden_native_config",
+                        side_effect=validate):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code == 0
+        mock_support.assert_called_once_with()
+
+    def test_support_detection_exception_fails_before_file_io(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with mock.patch.object(
+                config.device_info,
+                "get_num_npus",
+                side_effect=RuntimeError("support detection failed")), \
+                mock.patch.object(config, "_snapshot_golden_native_config") as mock_gold_snapshot, \
+                mock.patch.object(config, "_snapshot_golden_native_init_config") as mock_init_snapshot, \
+                mock.patch.object(config, "_validate_golden_native_config") as mock_validate, \
+                mock.patch.object(config, "migrate_db_to_lastest") as mock_migrate, \
+                mock.patch.object(config, "_invoke_golden_native_reload") as mock_reload:
+            result = runner.invoke(
+                config.config.commands["load_golden_config"],
+                ["--check-only", "-b", "golden_config.json"]
+            )
+
+        assert result.exit_code != 0
+        assert "support detection failed" in result.output
+        mock_gold_snapshot.assert_not_called()
+        mock_init_snapshot.assert_not_called()
+        mock_validate.assert_not_called()
+        mock_migrate.assert_not_called()
+        mock_reload.assert_not_called()
+
+    def test_inconsistent_trusted_asic_metadata_fails_before_file_io(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with mock.patch.object(config.device_info, "get_num_npus", return_value=2), \
+                mock.patch.object(config.device_info, "is_multi_npu", return_value=False), \
+                mock.patch.object(config.multi_asic, "is_multi_asic", return_value=True), \
+                mock.patch.object(
+                    config.multi_asic,
+                    "get_namespace_list",
+                    return_value=["asic0", "asic1"]), \
+                mock.patch.object(config, "_snapshot_golden_native_config") as mock_snapshot:
+            result = runner.invoke(
+                config.config.commands["load_golden_config"],
+                ["--check-only", "-b", "golden_config.json"]
+            )
+
+        assert result.exit_code != 0
+        assert "inconsistent trusted ASIC-count metadata" in result.output
+        mock_snapshot.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "namespaces",
+        [
+            ["asic1", "asic2"],
+            ["asic0", "asic2"]
+        ]
+    )
+    def test_non_contiguous_trusted_asic_namespaces_fail_before_file_io(
+            self, get_cmd_module, namespaces):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with mock.patch.object(config.device_info, "get_num_npus", return_value=2), \
+                mock.patch.object(config.device_info, "is_multi_npu", return_value=True), \
+                mock.patch.object(config.multi_asic, "is_multi_asic", return_value=True), \
+                mock.patch.object(
+                    config.multi_asic,
+                    "get_namespace_list",
+                    return_value=namespaces), \
+                mock.patch.object(config, "_snapshot_golden_native_config") as mock_gold_snapshot, \
+                mock.patch.object(config, "_snapshot_golden_native_init_config") as mock_init_snapshot:
+            result = runner.invoke(
+                config.config.commands["load_golden_config"],
+                ["--check-only", "-b", "golden_config.json"]
+            )
+
+        assert result.exit_code != 0
+        assert "requires zero-based contiguous namespaces" in result.output
+        mock_gold_snapshot.assert_not_called()
+        mock_init_snapshot.assert_not_called()
+
+    def test_migrate_only_uses_validated_snapshots_without_reloading(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        original_config = self._valid_golden_config()
+        original_init_config = self._valid_init_config()
+
+        with runner.isolated_filesystem():
+            self._write_json("golden_config.json", original_config)
+            self._write_json("init_cfg.json", original_init_config)
+
+            def validate_snapshot(
+                    snapshot_name, display_filename, init_snapshot_name,
+                    init_display_filename, _support):
+                assert display_filename == "golden_config.json"
+                assert init_display_filename == "init_cfg.json"
+                with open(snapshot_name) as snapshot:
+                    assert json.load(snapshot) == original_config
+                with open(init_snapshot_name) as init_snapshot:
+                    assert json.load(init_snapshot) == original_init_config
+                self._write_json("golden_config.json", {"replaced": True})
+                self._write_json("init_cfg.json", {"replaced": True})
+                return [(config.DEFAULT_NAMESPACE, original_config)]
+
+            def migrate_snapshot(
+                    namespace, config_source, snapshot_name, init_snapshot_name):
+                assert namespace == config.DEFAULT_NAMESPACE
+                assert config_source == config.DB_MIGRATION_SOURCE_GOLDEN
+                with open(snapshot_name) as snapshot:
+                    assert json.load(snapshot) == original_config
+                with open(init_snapshot_name) as init_snapshot:
+                    assert json.load(init_snapshot) == original_init_config
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(
+                        config,
+                        "_validate_golden_native_config",
+                        side_effect=validate_snapshot), \
+                    mock.patch.object(
+                        config,
+                        "migrate_db_to_lastest",
+                        side_effect=migrate_snapshot) as mock_migrate, \
+                    mock.patch.object(config, "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["-y", "--migrate-only", "-b", "golden_config.json"]
+                )
+
+            snapshot_name = mock_migrate.call_args.args[2]
+            init_snapshot_name = mock_migrate.call_args.args[3]
+            assert result.exit_code == 0
+            assert not os.path.exists(snapshot_name)
+            assert not os.path.exists(init_snapshot_name)
+            mock_reload.assert_not_called()
+
+    def test_reload_delegates_without_sysinfo_or_nested_lock(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", self._valid_golden_config())
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "_config_scopes_yang_validation", return_value=True), \
+                    mock.patch.object(
+                        config,
+                        "_invoke_golden_native_reload",
+                        return_value=None) as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["-y", "-f", "golden_config.json"]
+                )
+
+            assert result.exit_code == 0
+            assert "Acquired lock on" in result.output
+            assert "Released lock on" in result.output
+            context, filename, no_service_restart, force, init_filename, \
+                generation_transaction, persist_generation = \
+                mock_reload.call_args.args
+            assert isinstance(context, click.Context)
+            assert os.path.basename(filename).startswith(
+                "golden_config.normalized."
+            )
+            assert filename.endswith(".json")
+            assert not os.path.exists(filename)
+            assert os.path.basename(init_filename).startswith("init_cfg.")
+            assert init_filename.endswith(".json")
+            assert not os.path.exists(init_filename)
+            assert no_service_restart is False
+            assert force is True
+            assert generation_transaction is self._generation_transactions[0]
+            assert persist_generation is False
+
+    def test_golden_native_mutation_rejects_no_service_restart(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        result = runner.invoke(
+            config.config.commands["load_golden_config"],
+            ["-y", "-n", "-b", "golden_config.json"]
+        )
+
+        assert result.exit_code == 2
+        assert "Redis writers must be quiesced" in result.output
+
+    def test_reload_helper_disables_sysinfo_and_bypasses_nested_lock(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        context = mock.Mock()
+
+        config._invoke_golden_native_reload(
+            context,
+            "golden_config.json",
+            no_service_restart=True,
+            force=True
+        )
+
+        context.invoke.assert_called_once_with(
+            config.config.commands["reload"],
+            filename="golden_config.json",
+            yes=True,
+            load_sysinfo=False,
+            no_service_restart=True,
+            force=True,
+            file_format="config_db",
+            bypass_lock=True,
+            migration_config_source=config.DB_MIGRATION_SOURCE_GOLDEN,
+            init_config_file=config.INIT_CFG_FILE,
+            generation_transaction=None,
+            persist_generation=False
+        )
+
+    def test_reload_helper_forwards_source_through_click_context(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        reload_command = config.config.commands["reload"]
+        callback = mock.Mock()
+        context = click.Context(config.config.commands["load_golden_config"])
+
+        with mock.patch.object(reload_command, "callback", callback):
+            config._invoke_golden_native_reload(
+                context,
+                "golden_config.json",
+                no_service_restart=True,
+                force=True
+            )
+
+        assert callback.call_args.kwargs["migration_config_source"] == \
+            config.DB_MIGRATION_SOURCE_GOLDEN
+        assert callback.call_args.kwargs["init_config_file"] == config.INIT_CFG_FILE
+
+    def test_reload_migrates_from_the_exact_loaded_gold(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", self._valid_golden_config())
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "_config_scopes_yang_validation", return_value=True), \
+                    mock.patch.object(config, "migrate_db_to_lastest") as mock_migrate, \
+                    mock.patch(
+                        "utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)
+                    ):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["-y", "-f", "golden_config.json"],
+                    obj={"config_db": db.cfgdb}
+                )
+
+        assert result.exit_code == 0
+        migration_args = mock_migrate.call_args.args
+        assert migration_args[:2] == (
+            config.DEFAULT_NAMESPACE,
+            config.DB_MIGRATION_SOURCE_GOLDEN
+        )
+        assert os.path.basename(migration_args[2]).startswith(
+            "golden_config.normalized."
+        )
+        assert migration_args[2].endswith(".json")
+        assert not os.path.exists(migration_args[2])
+        assert os.path.basename(migration_args[3]).startswith("init_cfg.")
+        assert migration_args[3].endswith(".json")
+        assert not os.path.exists(migration_args[3])
+
+    def test_reload_uses_snapshot_after_source_replacement(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        original_config = self._valid_golden_config()
+        original_init_config = self._valid_init_config()
+
+        with runner.isolated_filesystem():
+            self._write_json("golden_config.json", original_config)
+            self._write_json("init_cfg.json", original_init_config)
+
+            def validate_snapshot(
+                    snapshot_name, display_filename, init_snapshot_name,
+                    init_display_filename, _support):
+                assert display_filename == "golden_config.json"
+                assert init_display_filename == "init_cfg.json"
+                with open(snapshot_name) as snapshot:
+                    assert json.load(snapshot) == original_config
+                with open(init_snapshot_name) as init_snapshot:
+                    assert json.load(init_snapshot) == original_init_config
+                self._write_json("golden_config.json", {"replaced": True})
+                self._write_json("init_cfg.json", {"replaced": True})
+
+            def invoke_snapshot(
+                    _ctx, snapshot_name, _no_restart, _force,
+                    init_snapshot_name, generation_transaction,
+                    persist_generation):
+                with open(snapshot_name) as snapshot:
+                    assert json.load(snapshot) == original_config
+                with open(init_snapshot_name) as init_snapshot:
+                    assert json.load(init_snapshot) == original_init_config
+                assert generation_transaction is self._generation_transactions[0]
+                assert persist_generation is False
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                    config,
+                    "_validate_golden_native_config",
+                    side_effect=validate_snapshot), \
+                    mock.patch.object(
+                        config,
+                        "_invoke_golden_native_reload",
+                        side_effect=invoke_snapshot) as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["-y", "-b", "golden_config.json"]
+                )
+
+            snapshot_name = mock_reload.call_args.args[1]
+            init_snapshot_name = mock_reload.call_args.args[4]
+            assert result.exit_code == 0
+            assert not os.path.exists(snapshot_name)
+            assert not os.path.exists(init_snapshot_name)
+            with open("golden_config.json") as replaced:
+                assert json.load(replaced) == {"replaced": True}
+            with open("init_cfg.json") as replaced:
+                assert json.load(replaced) == {"replaced": True}
+
+    def test_db_migration_uses_exact_golden_source_file(self, get_cmd_module):
+        (config, _) = get_cmd_module
+
+        with mock.patch.object(config.os.path, "isfile", return_value=True), \
+                mock.patch.object(config.os, "access", return_value=True), \
+                mock.patch.object(config.clicommon, "run_command") as mock_run_command:
+            config.migrate_db_to_lastest(
+                config_source=config.DB_MIGRATION_SOURCE_GOLDEN,
+                config_source_file="golden_config.json",
+                init_config_file="init_cfg.json"
+            )
+
+        mock_run_command.assert_called_once_with(
+            [
+                "/usr/local/bin/db_migrator.py",
+                "-o",
+                "migrate",
+                "--config-source",
+                "golden",
+                "--config-source-file",
+                "golden_config.json",
+                "--init-config-file",
+                "init_cfg.json"
+            ],
+            display_cmd=True
+        )
+
+    def test_db_migration_preserves_automatic_source_by_default(self, get_cmd_module):
+        (config, _) = get_cmd_module
+
+        with mock.patch.object(config.os.path, "isfile", return_value=True), \
+                mock.patch.object(config.os, "access", return_value=True), \
+                mock.patch.object(config.clicommon, "run_command") as mock_run_command:
+            config.migrate_db_to_lastest()
+
+        mock_run_command.assert_called_once_with(
+            ["/usr/local/bin/db_migrator.py", "-o", "migrate"],
+            display_cmd=True
+        )
+
+    def test_missing_init_config_fails_closed(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with runner.isolated_filesystem():
+            self._write_json("golden_config.json", self._valid_golden_config())
+            with mock.patch.object(config, "INIT_CFG_FILE", "missing_init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "Failed to snapshot init config 'missing_init_cfg.json'" in result.output
+
+    def test_malformed_init_config_fails_closed(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with runner.isolated_filesystem():
+            with open("init_cfg.json", 'w') as init_file:
+                init_file.write("{")
+            self._write_json("golden_config.json", self._valid_golden_config())
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "Failed to read init config 'init_cfg.json'" in result.output
+
+    def test_malformed_golden_config_fails_closed(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            with open("golden_config.json", 'w') as golden_file:
+                golden_file.write("{")
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "Failed to read golden config 'golden_config.json'" in result.output
+
+    def test_duplicate_wrapped_scope_key_fails_before_yang_validation(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        scope_config = json.dumps(self._valid_golden_config())
+        raw_config = (
+            '{"localhost": %s, "asic0": %s, "asic1": %s, "localhost": %s}'
+            % (scope_config, scope_config, scope_config, scope_config)
+        )
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            with open("golden_config.json", 'w') as golden_file:
+                golden_file.write(raw_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                        config.multi_asic, "is_multi_asic", return_value=True), \
+                    mock.patch.object(
+                        config.multi_asic,
+                        "get_namespace_list",
+                        return_value=["asic0", "asic1"]), \
+                    mock.patch.object(
+                        config,
+                        "_config_scopes_yang_validation",
+                        return_value=True) as mock_yang, \
+                    mock.patch.object(
+                        config,
+                        "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "Duplicate JSON key 'localhost'" in result.output
+        mock_yang.assert_not_called()
+        mock_reload.assert_not_called()
+
+    def test_duplicate_table_key_fails_before_yang_validation(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_golden_config()
+        raw_config = (
+            '{"DEVICE_METADATA": %s, "FEATURE": %s, "FEATURE": %s, "PORT": %s}'
+            % (
+                json.dumps(golden_config["DEVICE_METADATA"]),
+                json.dumps(golden_config["FEATURE"]),
+                json.dumps(golden_config["FEATURE"]),
+                json.dumps(golden_config["PORT"])
+            )
+        )
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            with open("golden_config.json", 'w') as golden_file:
+                golden_file.write(raw_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                        config,
+                        "_config_scopes_yang_validation",
+                        return_value=True) as mock_yang, \
+                    mock.patch.object(
+                        config,
+                        "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "Duplicate JSON key 'FEATURE'" in result.output
+        mock_yang.assert_not_called()
+        mock_reload.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "switch_type, expected_error",
+        [
+            (
+                "voq",
+                "switch_type 'voq' does not match trusted profile "
+                "'standalone_npu' switch_type 'npu'"
+            ),
+            (
+                "fabric",
+                "switch_type 'fabric' does not match trusted profile "
+                "'standalone_npu' switch_type 'npu'"
+            ),
+            (
+                "chassis-packet",
+                "switch_type 'chassis-packet' does not match trusted profile "
+                "'standalone_npu' switch_type 'npu'"
+            ),
+            (
+                "dpu",
+                "switch_type 'dpu' does not match trusted profile "
+                "'standalone_npu' switch_type 'npu'"
+            ),
+            (None, "switch_type must be a string"),
+            (7, "switch_type must be a string")
+        ]
+    )
+    def test_candidate_switch_type_fails_before_yang_validation(
+            self, get_cmd_module, switch_type, expected_error):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_golden_config()
+        golden_config["DEVICE_METADATA"]["localhost"]["switch_type"] = switch_type
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                        config,
+                        "_config_scopes_yang_validation",
+                        return_value=True) as mock_yang, \
+                    mock.patch.object(
+                        config,
+                        "migrate_db_to_lastest") as mock_migrate, \
+                    mock.patch.object(
+                        config,
+                        "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert expected_error in result.output
+        mock_yang.assert_not_called()
+        mock_migrate.assert_not_called()
+        mock_reload.assert_not_called()
+
+    def test_wrapped_candidate_switch_type_reports_failing_scope_before_yang(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_multiasic_golden_config()
+        golden_config["asic1"]["DEVICE_METADATA"]["localhost"]["switch_type"] = "dpu"
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                        config.multi_asic, "is_multi_asic", return_value=True), \
+                    mock.patch.object(
+                        config.multi_asic,
+                        "get_namespace_list",
+                        return_value=["asic0", "asic1"]), \
+                    mock.patch.object(
+                        config,
+                        "_config_scopes_yang_validation",
+                        return_value=True) as mock_yang, \
+                    mock.patch.object(
+                        config,
+                        "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert (
+            "scope 'asic1' switch_type 'dpu' does not match trusted profile "
+            "'standalone_npu' switch_type 'npu'" in result.output
+        )
+        mock_yang.assert_not_called()
+        mock_reload.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "switch_type_present, switch_type, expected_switch_type",
+        [
+            (False, None, None),
+            (True, "", None),
+            (True, "   ", None),
+            (True, "npu", "npu"),
+            (True, " NpU ", "npu")
+        ]
+    )
+    def test_candidate_switch_type_is_normalized_for_yang_and_reload(
+            self, get_cmd_module, switch_type_present, switch_type,
+            expected_switch_type):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_golden_config()
+        if switch_type_present:
+            golden_config["DEVICE_METADATA"]["localhost"]["switch_type"] = \
+                switch_type
+        observed_paths = {}
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+            with open("golden_config.json", "rb") as source:
+                original_source = source.read()
+
+            def assert_normalized_snapshot(snapshot_name):
+                with open(snapshot_name) as snapshot:
+                    normalized_config = json.load(snapshot)
+                metadata = normalized_config["DEVICE_METADATA"]["localhost"]
+                if expected_switch_type is None:
+                    assert "switch_type" not in metadata
+                else:
+                    assert metadata["switch_type"] == expected_switch_type
+                assert (os.stat(snapshot_name).st_mode & 0o777) == 0o600
+
+            def validate_normalized_snapshot(snapshot_name, _scope_configs):
+                assert_normalized_snapshot(snapshot_name)
+                observed_paths["yang"] = snapshot_name
+                return True
+
+            def reload_normalized_snapshot(
+                    _ctx, snapshot_name, _no_restart, _force,
+                    _init_snapshot_name, generation_transaction,
+                    _persist_generation):
+                assert_normalized_snapshot(snapshot_name)
+                observed_paths["reload"] = snapshot_name
+                assert generation_transaction is self._generation_transactions[0]
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                        config,
+                        "_config_scopes_yang_validation",
+                        side_effect=validate_normalized_snapshot), \
+                    mock.patch.object(
+                        config,
+                        "_invoke_golden_native_reload",
+                        side_effect=reload_normalized_snapshot) as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["-y", "-b", "golden_config.json"]
+                )
+            with open("golden_config.json", "rb") as source:
+                final_source = source.read()
+
+        assert result.exit_code == 0
+        mock_reload.assert_called_once()
+        assert observed_paths["yang"] == observed_paths["reload"]
+        assert os.path.basename(observed_paths["reload"]).startswith(
+            "golden_config.normalized."
+        )
+        assert not os.path.exists(observed_paths["reload"])
+        assert final_source == original_source
+
+    def test_migrate_only_uses_normalized_switch_type_snapshot(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_golden_config()
+        golden_config["DEVICE_METADATA"]["localhost"]["switch_type"] = " NpU "
+        observed_paths = {}
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+            with open("golden_config.json", "rb") as source:
+                original_source = source.read()
+
+            def assert_normalized_snapshot(snapshot_name):
+                with open(snapshot_name) as snapshot:
+                    normalized_config = json.load(snapshot)
+                assert normalized_config["DEVICE_METADATA"]["localhost"][
+                    "switch_type"
+                ] == "npu"
+                assert (os.stat(snapshot_name).st_mode & 0o777) == 0o600
+
+            def validate_normalized_snapshot(snapshot_name, _scope_configs):
+                assert_normalized_snapshot(snapshot_name)
+                observed_paths["yang"] = snapshot_name
+                return True
+
+            def migrate_normalized_snapshot(
+                    _namespace, _config_source, snapshot_name,
+                    _init_snapshot_name):
+                assert_normalized_snapshot(snapshot_name)
+                observed_paths["migration"] = snapshot_name
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                        config,
+                        "_config_scopes_yang_validation",
+                        side_effect=validate_normalized_snapshot), \
+                    mock.patch.object(
+                        config,
+                        "migrate_db_to_lastest",
+                        side_effect=migrate_normalized_snapshot), \
+                    mock.patch.object(
+                        config,
+                        "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["-y", "--migrate-only", "-b", "golden_config.json"]
+                )
+            with open("golden_config.json", "rb") as source:
+                final_source = source.read()
+
+        assert result.exit_code == 0
+        mock_reload.assert_not_called()
+        assert observed_paths["yang"] == observed_paths["migration"]
+        assert os.path.basename(observed_paths["migration"]).startswith(
+            "golden_config.normalized."
+        )
+        assert not os.path.exists(observed_paths["migration"])
+        assert final_source == original_source
+
+    def test_yang_invalid_golden_config_fails_closed(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", self._valid_golden_config())
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "_config_scopes_yang_validation", return_value=False):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "Invalid golden config file 'golden_config.json'" in result.output
+
+    def test_missing_required_metadata_fails_closed(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_golden_config()
+        del golden_config["DEVICE_METADATA"]["localhost"]["mac"]
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "_config_scopes_yang_validation", return_value=True):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "DEVICE_METADATA.localhost.mac" in result.output
+
+    def test_missing_device_type_fails_closed(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_golden_config()
+        del golden_config["DEVICE_METADATA"]["localhost"]["type"]
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "_config_scopes_yang_validation", return_value=True):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "DEVICE_METADATA.localhost.type" in result.output
+
+    def test_trusted_identity_uses_local_sources(self, get_cmd_module):
+        (config, _) = get_cmd_module
+
+        with mock.patch.object(
+                config.device_info, "get_hostname", return_value="trusted-host"), \
+                mock.patch.object(
+                    config.device_info,
+                    "get_platform",
+                    return_value="x86_64-kvm_x86_64-r0") as mock_get_platform, \
+                mock.patch.object(
+                    config.device_info,
+                    "get_hwsku",
+                    return_value="Force10-S6000"), \
+                mock.patch.object(
+                    config.device_info,
+                    "get_system_mac",
+                    return_value="00:01:02:03:04:05") as mock_get_system_mac:
+            identity = config._read_trusted_golden_native_identity()
+
+        assert identity == {
+            "platform": "x86_64-kvm_x86_64-r0",
+            "hwsku": "Force10-S6000",
+            "hostname": "trusted-host",
+            "mac": "00:01:02:03:04:05",
+        }
+        mock_get_platform.assert_called_once_with(config_db=None)
+        mock_get_system_mac.assert_called_once_with(hostname="trusted-host")
+
+    @pytest.mark.parametrize("field,candidate_value,trusted_value", [
+        ("hostname", "other-host", "sonic"),
+        ("platform", "x86_64-other-r0", "x86_64-kvm_x86_64-r0"),
+        ("hwsku", "Other-HWSKU", "Force10-S6000"),
+        ("mac", "00:01:02:03:04:06", "00:01:02:03:04:05"),
+    ])
+    def test_mismatched_device_identity_fails_closed(
+            self, get_cmd_module, field, candidate_value, trusted_value):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_golden_config()
+        golden_config["DEVICE_METADATA"]["localhost"][field] = candidate_value
+        trusted_identity = {
+            "hostname": "sonic",
+            "platform": "x86_64-kvm_x86_64-r0",
+            "mac": "00:01:02:03:04:05",
+            "hwsku": "Force10-S6000"
+        }
+        trusted_identity[field] = trusted_value
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "_config_scopes_yang_validation", return_value=True), \
+                    mock.patch.object(
+                        config,
+                        "_read_trusted_golden_native_identity",
+                        return_value=trusted_identity):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "does not match trusted local device identity" in result.output
+        assert "DEVICE_METADATA.localhost.{}".format(field) in result.output
+
+    def test_mac_identity_comparison_is_case_and_separator_insensitive(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", self._valid_golden_config())
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "_config_scopes_yang_validation", return_value=True), \
+                    mock.patch.object(
+                        config,
+                        "_read_trusted_golden_native_identity",
+                        return_value={
+                            "hostname": "sonic",
+                            "platform": "x86_64-kvm_x86_64-r0",
+                            "mac": "00-01-02-03-04-05",
+                            "hwsku": "Force10-S6000"
+                        }):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code == 0
+
+    def test_incomplete_golden_config_fails_closed(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_golden_config()
+        del golden_config["FEATURE"]["bgp"]["state"]
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "_config_scopes_yang_validation", return_value=True):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "FEATURE.bgp.state" in result.output
+
+    def test_missing_hwsku_config_fails_closed(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_golden_config()
+        del golden_config["PORT"]
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "_config_scopes_yang_validation", return_value=True):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "HWSKU config: PORT" in result.output
+
+    def test_hard_dependency_failure_is_propagated(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_golden_config()
+        golden_config["AAA"] = {"authentication": {"login": "tacacs+"}}
+        golden_config["TACPLUS"] = {"global": {}}
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=False), \
+                    mock.patch.object(config, "_config_scopes_yang_validation", return_value=True):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert "Authentication with 'tacacs+' is not allowed" in result.output
+
+    def test_multiasic_check_only_validates_host_and_asic_scopes(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_multiasic_golden_config()
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=True), \
+                    mock.patch.object(
+                        config.multi_asic,
+                        "get_namespace_list",
+                        return_value=["asic0", "asic1"]), \
+                    mock.patch.object(
+                        config,
+                        "_config_scopes_yang_validation",
+                        return_value=True), \
+                    mock.patch.object(
+                        config,
+                        "_read_hardware_config",
+                        return_value=self._valid_hardware_config()) as mock_hardware, \
+                    mock.patch.object(config, "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code == 0
+        assert "Golden config validation succeeded." in result.output
+        assert golden_config["asic0"]["DEVICE_METADATA"]["localhost"][
+            "asic_id"
+        ] == "01.00.0"
+        assert "asic_id" not in golden_config["asic1"][
+            "DEVICE_METADATA"
+        ]["localhost"]
+        assert mock_hardware.call_args_list == [
+            mock.call("multi_asic", "asic0"),
+            mock.call("multi_asic", "asic1")
+        ]
+        mock_reload.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "host_hwsku, expected_error",
+        [
+            (
+                None,
+                "localhost.DEVICE_METADATA.localhost.hwsku"
+            ),
+            (
+                "Other-HWSKU",
+                "localhost.DEVICE_METADATA.localhost.hwsku expected "
+                "'Force10-S6000', got 'Other-HWSKU'"
+            )
+        ]
+    )
+    def test_multiasic_host_hwsku_is_required_and_trusted(
+            self, get_cmd_module, host_hwsku, expected_error):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_multiasic_golden_config()
+        host_metadata = golden_config["localhost"]["DEVICE_METADATA"][
+            "localhost"
+        ]
+        if host_hwsku is None:
+            del host_metadata["hwsku"]
+        else:
+            host_metadata["hwsku"] = host_hwsku
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                        config.multi_asic,
+                        "is_multi_asic",
+                        return_value=True), \
+                    mock.patch.object(
+                        config.multi_asic,
+                        "get_namespace_list",
+                        return_value=["asic0", "asic1"]), \
+                    mock.patch.object(
+                        config,
+                        "_config_scopes_yang_validation",
+                        return_value=True), \
+                    mock.patch.object(
+                        config,
+                        "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert expected_error in result.output
+        mock_reload.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "invalid_case, expected_error",
+        [
+            ("missing_host", "missing scopes: localhost"),
+            ("missing_asic", "missing scopes: asic1"),
+            ("extra_asic", "extra scopes: asic2"),
+            ("empty_scope", "scope 'asic1' must not be empty"),
+            ("non_object_scope", "scope 'asic1' must contain a JSON object")
+        ]
+    )
+    def test_multiasic_wrapper_fails_before_migration(
+            self, get_cmd_module, invalid_case, expected_error):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_multiasic_golden_config()
+
+        if invalid_case == "missing_host":
+            del golden_config["localhost"]
+        elif invalid_case == "missing_asic":
+            del golden_config["asic1"]
+        elif invalid_case == "extra_asic":
+            golden_config["asic2"] = self._valid_golden_config()
+        elif invalid_case == "empty_scope":
+            golden_config["asic1"] = {}
+        else:
+            golden_config["asic1"] = []
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=True), \
+                    mock.patch.object(
+                        config.multi_asic,
+                        "get_namespace_list",
+                        return_value=["asic0", "asic1"]), \
+                    mock.patch.object(config, "migrate_db_to_lastest") as mock_migrate, \
+                    mock.patch.object(config, "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["-y", "--migrate-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert expected_error in result.output
+        mock_migrate.assert_not_called()
+        mock_reload.assert_not_called()
+
+    def test_multiasic_scope_ownership_fails_closed(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_multiasic_golden_config()
+        metadata = golden_config["asic0"]["DEVICE_METADATA"]["localhost"]
+        metadata["asic_name"] = "asic9"
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=True), \
+                    mock.patch.object(
+                        config.multi_asic,
+                        "get_namespace_list",
+                        return_value=["asic0", "asic1"]), \
+                    mock.patch.object(
+                        config,
+                        "_config_scopes_yang_validation",
+                        return_value=True), \
+                    mock.patch.object(config, "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert (
+            "scope 'asic0' must set DEVICE_METADATA.localhost.asic_name "
+            "to 'asic0'"
+        ) in result.output
+        mock_reload.assert_not_called()
+
+    def test_multiasic_namespace_identity_is_scope_local(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_multiasic_golden_config()
+        metadata = golden_config["asic0"]["DEVICE_METADATA"]["localhost"]
+        metadata.update({
+            "platform": "namespace-platform",
+            "hostname": "namespace-host",
+            "mac": "02:42:f0:7f:99:99",
+            "hwsku": "namespace-hwsku",
+            "asic_id": "08:00.0",
+        })
+        golden_config["asic1"]["DEVICE_METADATA"]["localhost"].pop(
+            "asic_id",
+            None
+        )
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                        config.multi_asic,
+                        "is_multi_asic",
+                        return_value=True), \
+                    mock.patch.object(
+                        config.multi_asic,
+                        "get_namespace_list",
+                        return_value=["asic0", "asic1"]), \
+                    mock.patch.object(
+                        config,
+                        "_config_scopes_yang_validation",
+                        return_value=True), \
+                    mock.patch.object(
+                        config,
+                        "_read_hardware_config",
+                        return_value=self._valid_hardware_config()), \
+                    mock.patch.object(
+                        config,
+                        "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code == 0
+        mock_reload.assert_not_called()
+
+    def test_multiasic_namespace_device_types_are_scope_local(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_multiasic_golden_config()
+        golden_config["asic0"]["DEVICE_METADATA"]["localhost"][
+            "type"
+        ] = "BackEndToRRouter"
+        golden_config["asic1"]["DEVICE_METADATA"]["localhost"][
+            "type"
+        ] = "SpineRouter"
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                        config.multi_asic,
+                        "is_multi_asic",
+                        return_value=True), \
+                    mock.patch.object(
+                        config.multi_asic,
+                        "get_namespace_list",
+                        return_value=["asic0", "asic1"]), \
+                    mock.patch.object(
+                        config,
+                        "_config_scopes_yang_validation",
+                        return_value=True) as mock_yang, \
+                    mock.patch.object(
+                        config,
+                        "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code == 0
+        mock_yang.assert_called_once()
+        mock_reload.assert_not_called()
+
+    def test_multiasic_scope_name_is_trimmed_and_normalized(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_multiasic_golden_config()
+        golden_config["asic0"]["DEVICE_METADATA"]["localhost"][
+            "asic_name"
+        ] = " ASIC0 "
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            def validate_normalized_snapshot(snapshot_name, _scope_configs):
+                with open(snapshot_name) as snapshot:
+                    normalized_config = json.load(snapshot)
+                assert normalized_config["asic0"]["DEVICE_METADATA"][
+                    "localhost"
+                ]["asic_name"] == "asic0"
+                return True
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                        config.multi_asic,
+                        "is_multi_asic",
+                        return_value=True), \
+                    mock.patch.object(
+                        config.multi_asic,
+                        "get_namespace_list",
+                        return_value=["asic0", "asic1"]), \
+                    mock.patch.object(
+                        config,
+                        "_config_scopes_yang_validation",
+                        side_effect=validate_normalized_snapshot), \
+                    mock.patch.object(
+                        config,
+                        "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code == 0
+        mock_reload.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "missing_source, expected_error",
+        [
+            (
+                "init",
+                "scope 'asic1' does not completely cover init config: FEATURE.bgp.state"
+            ),
+            (
+                "hardware",
+                "scope 'asic1' does not completely cover HWSKU config: PORT.Ethernet0"
+            )
+        ]
+    )
+    def test_multiasic_scope_completeness_reports_failing_scope(
+            self, get_cmd_module, missing_source, expected_error):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_multiasic_golden_config()
+        if missing_source == "init":
+            del golden_config["asic1"]["FEATURE"]["bgp"]["state"]
+        else:
+            del golden_config["asic1"]["PORT"]["Ethernet0"]
+
+        with runner.isolated_filesystem():
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("golden_config.json", golden_config)
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(config.multi_asic, "is_multi_asic", return_value=True), \
+                    mock.patch.object(
+                        config.multi_asic,
+                        "get_namespace_list",
+                        return_value=["asic0", "asic1"]), \
+                    mock.patch.object(
+                        config,
+                        "_config_scopes_yang_validation",
+                        return_value=True), \
+                    mock.patch.object(config, "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["--check-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code != 0
+        assert expected_error in result.output
+        mock_reload.assert_not_called()
+
+    def test_multiasic_migrate_only_uses_one_snapshot_in_scope_order(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        original_config = self._valid_multiasic_golden_config()
+        original_init_config = self._valid_init_config()
+        scope_configs = [
+            (config.DEFAULT_NAMESPACE, original_config["localhost"]),
+            ("asic0", original_config["asic0"]),
+            ("asic1", original_config["asic1"])
+        ]
+        support = self._support(
+            config,
+            "standalone_npu",
+            num_asics=2,
+            namespaces=("asic0", "asic1")
+        )
+
+        with runner.isolated_filesystem():
+            self._write_json("golden_config.json", original_config)
+            self._write_json("init_cfg.json", original_init_config)
+
+            def validate_snapshot(
+                    snapshot_name, display_filename, init_snapshot_name,
+                    init_display_filename, _support):
+                assert display_filename == "golden_config.json"
+                assert init_display_filename == "init_cfg.json"
+                with open(snapshot_name) as snapshot:
+                    assert json.load(snapshot) == original_config
+                with open(init_snapshot_name) as init_snapshot:
+                    assert json.load(init_snapshot) == original_init_config
+                self._write_json("golden_config.json", {"replaced": True})
+                self._write_json("init_cfg.json", {"replaced": True})
+                return scope_configs
+
+            def migrate_snapshot(
+                    namespace, config_source, snapshot_name, init_snapshot_name):
+                assert config_source == config.DB_MIGRATION_SOURCE_GOLDEN
+                with open(snapshot_name) as snapshot:
+                    assert json.load(snapshot) == original_config
+                with open(init_snapshot_name) as init_snapshot:
+                    assert json.load(init_snapshot) == original_init_config
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                        config,
+                        "_validate_golden_native_platform_support",
+                        return_value=support), \
+                    mock.patch.object(
+                        config,
+                        "_validate_golden_native_config",
+                        side_effect=validate_snapshot), \
+                    mock.patch.object(
+                        config,
+                        "migrate_db_to_lastest",
+                        side_effect=migrate_snapshot) as mock_migrate, \
+                    mock.patch.object(config, "_invoke_golden_native_reload") as mock_reload:
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["-y", "--migrate-only", "-b", "golden_config.json"]
+                )
+
+        assert result.exit_code == 0
+        assert [migration_call.args[0] for migration_call in mock_migrate.call_args_list] == [
+            config.DEFAULT_NAMESPACE,
+            "asic0",
+            "asic1"
+        ]
+        assert len({
+            migration_call.args[2] for migration_call in mock_migrate.call_args_list
+        }) == 1
+        assert len({
+            migration_call.args[3] for migration_call in mock_migrate.call_args_list
+        }) == 1
+        snapshot_name = mock_migrate.call_args.args[2]
+        init_snapshot_name = mock_migrate.call_args.args[3]
+        assert not os.path.exists(snapshot_name)
+        assert not os.path.exists(init_snapshot_name)
+        mock_reload.assert_not_called()
+
+    def test_multiasic_write_failure_rolls_back_prior_scopes(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        transaction = self._new_recording_transaction(config)
+        original_error = RuntimeError("asic1 write failed")
+        connector = mock.MagicMock()
+        connector.INIT_INDICATOR = "CONFIG_DB_INITIALIZED"
+        clients = [
+            (mock.MagicMock(), mock.MagicMock()),
+            (mock.MagicMock(), mock.MagicMock())
+        ]
+        clients[0][1].INIT_INDICATOR = "CONFIG_DB_INITIALIZED"
+        clients[1][1].INIT_INDICATOR = "CONFIG_DB_INITIALIZED"
+
+        def flush_configdb(namespace):
+            if namespace == "asic1":
+                raise original_error
+            return clients.pop(0)
+
+        with CliRunner().isolated_filesystem():
+            self._write_json(
+                "golden_config.json",
+                self._valid_multiasic_golden_config()
+            )
+            with mock.patch.object(
+                    config.multi_asic,
+                    "get_namespace_list",
+                    return_value=["asic0", "asic1"]), \
+                    mock.patch.object(
+                        config, "load_sysinfo_if_missing", return_value=False), \
+                    mock.patch.object(
+                        config, "flush_configdb", side_effect=flush_configdb), \
+                    mock.patch.object(
+                        config, "ConfigDBPipeConnector",
+                        return_value=connector), \
+                    mock.patch.object(
+                        config.sonic_cfggen.FormatConverter,
+                        "to_deserialized"), \
+                    mock.patch.object(
+                        config.sonic_cfggen.FormatConverter,
+                        "output_to_db",
+                        side_effect=lambda value: value), \
+                    mock.patch.object(
+                        config, "migrate_db_to_lastest") as mock_migrate:
+                with pytest.raises(RuntimeError) as caught:
+                    with config._generation_transaction_context(transaction):
+                        config.multiasic_write_to_db(
+                            "golden_config.json",
+                            load_sysinfo=False,
+                            migration_config_source=(
+                                config.DB_MIGRATION_SOURCE_GOLDEN),
+                            init_config_file="init_cfg.json",
+                            generation_transaction=transaction
+                        )
+
+        assert caught.value is original_error
+        assert [
+            event[1] for event in transaction.events
+            if event[0] == "mark_scope"
+        ] == [config.DEFAULT_NAMESPACE, "asic0", "asic1"]
+        assert [
+            migration_call.args[0]
+            for migration_call in mock_migrate.call_args_list
+        ] == [config.DEFAULT_NAMESPACE, "asic0"]
+        assert ("rollback", original_error) in transaction.events
+        assert "commit" not in transaction.events
+
+    def test_multiasic_migrate_only_later_failure_rolls_back(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        original_error = RuntimeError("asic1 migration failed")
+        golden_config = self._valid_multiasic_golden_config()
+        scope_configs = [
+            (config.DEFAULT_NAMESPACE, golden_config["localhost"]),
+            ("asic0", golden_config["asic0"]),
+            ("asic1", golden_config["asic1"])
+        ]
+        support = self._support(
+            config,
+            "standalone_npu",
+            num_asics=2,
+            namespaces=("asic0", "asic1")
+        )
+        migrated_namespaces = []
+
+        def migrate(namespace, *_args):
+            migrated_namespaces.append(namespace)
+            if namespace == "asic1":
+                raise original_error
+
+        with runner.isolated_filesystem():
+            self._write_json("golden_config.json", golden_config)
+            self._write_json("init_cfg.json", self._valid_init_config())
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                        config,
+                        "_validate_golden_native_platform_support",
+                        return_value=support), \
+                    mock.patch.object(
+                        config,
+                        "_validate_golden_native_config",
+                        return_value=scope_configs), \
+                    mock.patch.object(
+                        config,
+                        "migrate_db_to_lastest",
+                        side_effect=migrate):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    ["-y", "--migrate-only", "-b", "golden_config.json"]
+                )
+
+        transaction = self._generation_transactions[0]
+        assert result.exit_code != 0
+        assert migrated_namespaces == [
+            config.DEFAULT_NAMESPACE,
+            "asic0",
+            "asic1"
+        ]
+        assert [
+            event[1] for event in transaction.events
+            if event[0] == "mark_scope"
+        ] == [config.DEFAULT_NAMESPACE, "asic0", "asic1"]
+        assert ("rollback", original_error) in transaction.events
+        assert "commit" not in transaction.events
+
+    def test_migrate_only_preloads_and_persists_inside_one_transaction(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        runner = CliRunner()
+        golden_config = self._valid_multiasic_golden_config()
+        support = self._support(
+            config,
+            "standalone_npu",
+            num_asics=2,
+            namespaces=("asic0", "asic1"),
+        )
+        scope_configs = [
+            (config.DEFAULT_NAMESPACE, golden_config["localhost"]),
+            ("asic0", golden_config["asic0"]),
+            ("asic1", golden_config["asic1"]),
+        ]
+        preload_paths = []
+
+        def record_preload(namespace, filename, _init_filename, write):
+            preload_paths.append(filename)
+            self._generation_transaction_events.append(
+                ("preload-write" if write else "preload-check", namespace)
+            )
+
+        def record_migration(namespace, *_args):
+            self._generation_transaction_events.append(
+                ("migrate", namespace)
+            )
+
+        with runner.isolated_filesystem():
+            self._write_json("golden_config.json", golden_config)
+            self._write_json("init_cfg.json", self._valid_init_config())
+            self._write_json("config_db0.json", {"scope": "asic0"})
+
+            with mock.patch.object(config, "INIT_CFG_FILE", "init_cfg.json"), \
+                    mock.patch.object(
+                        config,
+                        "_validate_golden_native_platform_support",
+                        return_value=support), \
+                    mock.patch.object(
+                        config,
+                        "_validate_golden_native_config",
+                        return_value=scope_configs), \
+                    mock.patch.object(
+                        config,
+                        "_run_golden_native_namespace_config",
+                        side_effect=record_preload), \
+                    mock.patch.object(
+                        config,
+                        "migrate_db_to_lastest",
+                        side_effect=record_migration), \
+                    mock.patch.object(
+                        config,
+                        "_set_generation_config_db_initialized",
+                        side_effect=lambda _transaction:
+                            self._generation_transaction_events.append(
+                                "initialized"
+                            )), \
+                    mock.patch.object(
+                        config,
+                        "_persist_generation_config_files",
+                        side_effect=lambda _transaction:
+                            self._generation_transaction_events.append(
+                                "persisted"
+                            )), \
+                    mock.patch.object(
+                        config,
+                        "_stop_services",
+                        side_effect=lambda:
+                            self._generation_transaction_events.append(
+                                ("service", "stop")
+                            )), \
+                    mock.patch.object(
+                        config,
+                        "_reset_failed_services",
+                        side_effect=lambda:
+                            self._generation_transaction_events.append(
+                                ("service", "reset")
+                            )), \
+                    mock.patch.object(
+                        config,
+                        "update_sonic_environment",
+                        side_effect=lambda:
+                            self._generation_transaction_events.append(
+                                ("service", "environment")
+                            )), \
+                    mock.patch.object(
+                        config,
+                        "_restart_services",
+                        side_effect=lambda:
+                            self._generation_transaction_events.append(
+                                ("service", "restart")
+                            )):
+                result = runner.invoke(
+                    config.config.commands["load_golden_config"],
+                    [
+                        "-y",
+                        "--migrate-only",
+                        "--preload-namespace-config",
+                        "asic0",
+                        "config_db0.json",
+                        "-b",
+                        "golden_config.json",
+                    ]
+                )
+
+        events = self._generation_transaction_events
+        assert result.exit_code == 0
+        ordered_events = [
+            "begin",
+            ("service", "stop"),
+            ("preload-write", "asic0"),
+            ("migrate", config.DEFAULT_NAMESPACE),
+            ("migrate", "asic0"),
+            ("migrate", "asic1"),
+            "initialized",
+            "persisted",
+            ("service", "reset"),
+            ("service", "environment"),
+            ("service", "restart"),
+            "commit",
+        ]
+        assert [
+            event for event in events if event in ordered_events
+        ] == ordered_events
+        assert len(set(preload_paths)) == 1
+        assert preload_paths[0] != "config_db0.json"
+        assert not os.path.exists(preload_paths[0])
+
+    def test_generation_context_rolls_back_system_exit_and_preserves_identity(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        transaction = self._new_recording_transaction(config)
+        original_error = SystemExit(17)
+
+        with pytest.raises(SystemExit) as caught:
+            with config._generation_transaction_context(transaction):
+                raise original_error
+
+        assert caught.value is original_error
+        assert ("rollback", original_error) in transaction.events
+        assert "commit" not in transaction.events
+
+    def test_generation_context_surfaces_rollback_failure_aggregation(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        transaction = self._new_recording_transaction(config)
+        original_error = RuntimeError("write failed")
+        rollback_error = GenerationRollbackError(
+            original_error,
+            [
+                "CONFIG_DB restore failed",
+                "service recovery failed"
+            ],
+            "/tmp/generation-rollback-evidence"
+        )
+        transaction.rollback_error = rollback_error
+
+        with pytest.raises(GenerationRollbackError) as caught:
+            with config._generation_transaction_context(transaction):
+                raise original_error
+
+        assert caught.value is rollback_error
+        assert caught.value.original_error is original_error
+        assert caught.value.failures == (
+            "CONFIG_DB restore failed",
+            "service recovery failed"
+        )
+        assert caught.value.evidence_directory == \
+            "/tmp/generation-rollback-evidence"
+
+    def test_reload_write_failure_rolls_back_then_recovers_services(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        original_error = RuntimeError("CONFIG_DB write failed")
+
+        result, service_calls = self._invoke_real_single_asic_reload(
+            config,
+            run_command_error=original_error
+        )
+
+        transaction = self._generation_transactions[0]
+        assert result.exit_code != 0
+        assert result.exception is original_error
+        assert service_calls == [
+            "stop",
+            "reset",
+            "environment",
+            "restart"
+        ]
+        assert transaction.events.index(("rollback", original_error)) < \
+            transaction.events.index(("service", "reset"))
+        assert transaction.events.index(("service", "reset")) < \
+            transaction.events.index(("service", "environment"))
+        assert transaction.events.index(("service", "environment")) < \
+            transaction.events.index(("service", "restart"))
+        assert "commit" not in transaction.events
+
+    def test_reload_restart_failure_rolls_back_and_recovers_services(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        original_error = RuntimeError("service restart failed")
+
+        result, service_calls = self._invoke_real_single_asic_reload(
+            config,
+            restart_results=[original_error, None]
+        )
+
+        transaction = self._generation_transactions[0]
+        assert result.exit_code != 0
+        assert result.exception is original_error
+        assert service_calls == [
+            "stop",
+            "reset",
+            "environment",
+            "restart",
+            "stop",
+            "reset",
+            "environment",
+            "restart"
+        ]
+        rollback_index = transaction.events.index(
+            ("rollback", original_error)
+        )
+        assert rollback_index < len(transaction.events) - 1
+        assert transaction.events[rollback_index + 1:] == [
+            "service_quiescence",
+            ("service", "stop"),
+            "service_recovery",
+            ("service", "reset"),
+            ("service", "environment"),
+            ("service", "restart")
+        ]
+        assert "commit" not in transaction.events
+
+    def test_reload_commits_only_after_successful_service_restart(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+
+        result, service_calls = self._invoke_real_single_asic_reload(config)
+
+        transaction = self._generation_transactions[0]
+        assert result.exit_code == 0
+        assert service_calls == [
+            "stop",
+            "reset",
+            "environment",
+            "restart"
+        ]
+        assert transaction.events.index("begin") < \
+            transaction.events.index(("service", "stop"))
+        assert transaction.events.index(("service", "reset")) < \
+            transaction.events.index(("service", "environment"))
+        assert transaction.events.index(("service", "environment")) < \
+            transaction.events.index(("service", "restart"))
+        assert transaction.events.index(("service", "restart")) < \
+            transaction.events.index("commit")
+        assert not any(event[0] == "rollback" for event in transaction.events)
+
+    def test_reload_attempts_restart_when_reset_failed(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        original_error = SystemExit(17)
+
+        result, service_calls = self._invoke_real_single_asic_reload(
+            config,
+            reset_results=[original_error, None]
+        )
+
+        transaction = self._generation_transactions[0]
+        assert result.exit_code != 0
+        assert result.exception is original_error
+        assert service_calls == [
+            "stop",
+            "reset",
+            "environment",
+            "restart",
+            "stop",
+            "reset",
+            "environment",
+            "restart"
+        ]
+        first_reset = transaction.events.index(("service", "reset"))
+        first_environment = transaction.events.index(
+            ("service", "environment")
+        )
+        first_restart = transaction.events.index(("service", "restart"))
+        assert first_reset < first_environment < first_restart
+        assert "commit" not in transaction.events
+
+    def test_reload_attempts_restart_when_environment_generation_failed(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        original_error = RuntimeError("environment generation failed")
+
+        result, service_calls = self._invoke_real_single_asic_reload(
+            config,
+            environment_results=[original_error, None]
+        )
+
+        transaction = self._generation_transactions[0]
+        assert result.exit_code != 0
+        assert result.exception is original_error
+        assert service_calls == [
+            "stop",
+            "reset",
+            "environment",
+            "restart",
+            "stop",
+            "reset",
+            "environment",
+            "restart"
+        ]
+        first_environment = transaction.events.index(
+            ("service", "environment")
+        )
+        first_restart = transaction.events.index(("service", "restart"))
+        assert first_environment < first_restart
+        assert "commit" not in transaction.events
+
+    def test_reload_generic_commit_failure_rolls_back_and_recovers_services(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        commit_error = RuntimeError("generation commit failed")
+        self._generation_transaction_commit_error = commit_error
+
+        result, service_calls = self._invoke_real_single_asic_reload(config)
+
+        transaction = self._generation_transactions[0]
+        assert result.exit_code != 0
+        assert result.exception is commit_error
+        assert service_calls == [
+            "stop",
+            "reset",
+            "environment",
+            "restart",
+            "stop",
+            "reset",
+            "environment",
+            "restart"
+        ]
+        assert transaction.events.index("commit") < \
+            transaction.events.index(("rollback", commit_error))
+        rollback_index = transaction.events.index(
+            ("rollback", commit_error)
+        )
+        assert transaction.events[rollback_index + 1:] == [
+            "service_quiescence",
+            ("service", "stop"),
+            "service_recovery",
+            ("service", "reset"),
+            ("service", "environment"),
+            ("service", "restart")
+        ]
+
+    @pytest.mark.parametrize(
+        "arguments",
+        [
+            ["-y", "-f", "-b", "golden_config.json"],
+            ["-y", "--migrate-only", "-b", "golden_config.json"],
+        ]
+    )
+    def test_cleanup_failure_after_commit_exits_three_without_rollback(
+            self, get_cmd_module, arguments):
+        (config, _) = get_cmd_module
+        cleanup_error = GenerationCleanupError(
+            "committed evidence cleanup failed"
+        )
+        self._generation_transaction_commit_error = cleanup_error
+
+        result, service_calls = self._invoke_real_single_asic_reload(
+            config,
+            arguments=arguments
+        )
+
+        transaction = self._generation_transactions[0]
+        assert result.exit_code == 3
+        assert isinstance(result.exception, SystemExit)
+        click_error = result.exception.__context__
+        assert isinstance(
+            click_error,
+            config.GoldenNativeCommittedCleanupError
+        )
+        assert click_error.__cause__ is cleanup_error
+        assert "configuration committed successfully" in result.output.lower()
+        assert service_calls == [
+            "stop",
+            "reset",
+            "environment",
+            "restart"
+        ]
+        assert transaction.events.index(("service", "restart")) < \
+            transaction.events.index("commit")
+        assert "commit" in transaction.events
+        assert not any(
+            isinstance(event, tuple) and event[0] == "rollback"
+            for event in transaction.events
+        )
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+
+
+class TestHardwareConfigGeneration(object):
+    @pytest.mark.parametrize(
+        "namespace, expected_command",
+        [
+            (
+                "",
+                [
+                    config.SONIC_CFGGEN_PATH,
+                    "-H",
+                    "-k",
+                    "Force10-S6000",
+                    "--print-data"
+                ]
+            ),
+            (
+                "asic0",
+                [
+                    config.SONIC_CFGGEN_PATH,
+                    "-H",
+                    "-k",
+                    "Force10-S6000",
+                    "-n",
+                    "asic0",
+                    "--print-data"
+                ]
+            )
+        ]
+    )
+    def test_hardware_config_generation_is_namespace_aware(
+            self, get_cmd_module, namespace, expected_command):
+        (config, _) = get_cmd_module
+        hardware_config = TestLoadGoldenConfig._valid_hardware_config()
+        completed = mock.Mock(stdout=json.dumps(hardware_config))
+
+        with mock.patch.object(
+                config.subprocess,
+                "run",
+                return_value=completed) as mock_run:
+            assert config._read_hardware_config(
+                "Force10-S6000", namespace
+            ) == hardware_config
+
+        mock_run.assert_called_once_with(
+            expected_command,
+            check=True,
+            capture_output=True,
+            text=True
+        )
+
+
 class TestBMPConfig(object):
     @classmethod
     def setup_class(cls):
@@ -1192,7 +4175,10 @@ class TestConfigReloadMasic(object):
         with mock.patch("utilities_common.cli.run_command",
                         mock.MagicMock(side_effect=mock_run_command_side_effect)),\
             mock.patch('config.main.read_json_file',
-                       mock.MagicMock(side_effect=read_json_file_side_effect)):
+                       mock.MagicMock(side_effect=read_json_file_side_effect)), \
+                mock.patch(
+                    'config.main.config_file_yang_validation',
+                    return_value=True):
 
             runner = CliRunner()
 
@@ -1267,7 +4253,10 @@ class TestConfigReloadMasic(object):
         with mock.patch("utilities_common.cli.run_command",
                         mock.MagicMock(side_effect=mock_run_command_side_effect)),\
             mock.patch('config.main.read_json_file',
-                       mock.MagicMock(side_effect=read_json_file_side_effect)):
+                       mock.MagicMock(side_effect=read_json_file_side_effect)), \
+                mock.patch(
+                    'config.main.config_file_yang_validation',
+                    return_value=True):
 
             runner = CliRunner()
 
@@ -1321,8 +4310,12 @@ class TestConfigReloadMasic(object):
         self._create_dummy_config(dummy_cfg_file_asic0, device_metadata)
         self._create_dummy_config(dummy_cfg_file_asic1, device_metadata)
 
-        with mock.patch("utilities_common.cli.run_command",
-                        mock.MagicMock(side_effect=mock_run_command_side_effect)):
+        with mock.patch(
+                "utilities_common.cli.run_command",
+                mock.MagicMock(side_effect=mock_run_command_side_effect)), \
+                mock.patch(
+                    'config.main.config_file_yang_validation',
+                    return_value=True):
             runner = CliRunner()
             # 3 config files: 1 for host and 2 for asic
             cfg_files = f"{dummy_cfg_file},{dummy_cfg_file_asic0},{dummy_cfg_file_asic1}"
@@ -1351,8 +4344,12 @@ class TestConfigReloadMasic(object):
         self._create_dummy_config(dummy_cfg_file_asic0, device_metadata)
         self._create_dummy_config(dummy_cfg_file_asic1, device_metadata)
 
-        with mock.patch("utilities_common.cli.run_command",
-                        mock.MagicMock(side_effect=mock_run_command_side_effect)):
+        with mock.patch(
+                "utilities_common.cli.run_command",
+                mock.MagicMock(side_effect=mock_run_command_side_effect)), \
+                mock.patch(
+                    'config.main.config_file_yang_validation',
+                    return_value=True):
             runner = CliRunner()
             # add unnecessary spaces and comma at the end
             cfg_files = f"   {dummy_cfg_file} ,{dummy_cfg_file_asic0},  {dummy_cfg_file_asic1},"
@@ -1431,6 +4428,16 @@ class TestLoadMinigraph(object):
         print("SETUP")
         import config.main
         importlib.reload(config.main)
+
+    def test_help_marks_command_as_deprecated(self, get_cmd_module):
+        (config, _) = get_cmd_module
+        result = CliRunner().invoke(
+            config.config.commands["load_minigraph"],
+            ["--help"]
+        )
+
+        assert result.exit_code == 0
+        assert "Deprecated compatibility path" in result.output
 
     def read_json_file_side_effect(self, filename):
         return {
@@ -1775,6 +4782,96 @@ class TestLoadMinigraph(object):
             mock_load_yang_model.assert_called_once()
             mock_load_data.assert_called_once_with(configdbJson=valid_config)
             mock_validate_data_tree.assert_called_once()
+
+    def test_config_file_yang_validation_uses_fresh_instance_per_multiasic_scope(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        scope_configs = TestLoadGoldenConfig._valid_multiasic_golden_config()
+        yang_instances = [mock.Mock(tablesWithOutYang={}) for _ in range(3)]
+
+        with mock.patch.object(
+                config,
+                "read_json_file",
+                return_value=scope_configs), \
+                mock.patch.object(
+                config.multi_asic,
+                "is_multi_asic",
+                return_value=True), \
+                mock.patch.object(
+                    config.multi_asic,
+                    "get_namespace_list",
+                    return_value=["asic0", "asic1"]), \
+                mock.patch.object(
+                    config.sonic_yang,
+                    "SonicYang",
+                    side_effect=yang_instances) as mock_sonic_yang:
+            assert config.config_file_yang_validation("dummy_file.json")
+
+        assert mock_sonic_yang.call_count == 3
+        for yang_instance, scope_name in zip(
+                yang_instances, ("localhost", "asic0", "asic1")):
+            yang_instance.loadYangModel.assert_called_once_with()
+            yang_instance.loadData.assert_called_once_with(
+                configdbJson=scope_configs[scope_name]
+            )
+            yang_instance.validate_data_tree.assert_called_once_with()
+
+    def test_config_file_yang_validation_keeps_flat_namespace_files_supported(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        flat_config = TestLoadGoldenConfig._valid_golden_config()
+        yang_instance = mock.Mock(tablesWithOutYang={})
+
+        with mock.patch.object(
+                config,
+                "read_json_file",
+                return_value=flat_config), \
+                mock.patch.object(
+                    config.multi_asic,
+                    "is_multi_asic",
+                    return_value=True), \
+                mock.patch.object(
+                    config.sonic_yang,
+                    "SonicYang",
+                    return_value=yang_instance):
+            assert config.config_file_yang_validation("asic0-config.json")
+
+        yang_instance.loadData.assert_called_once_with(configdbJson=flat_config)
+        yang_instance.validate_data_tree.assert_called_once_with()
+
+    def test_golden_native_scope_validation_rejects_malformed_multiasic_wrapper(
+            self, get_cmd_module):
+        (config, _) = get_cmd_module
+        malformed_wrapper = {
+            "asic0": TestLoadGoldenConfig._valid_golden_config()
+        }
+
+        with mock.patch.object(
+                config.multi_asic,
+                "get_namespace_list",
+                return_value=["asic0"]), \
+                pytest.raises(ValueError, match="missing scopes: localhost"):
+            config._validate_multiasic_scope_configs(malformed_wrapper)
+
+    @pytest.mark.parametrize(
+        "namespaces",
+        [
+            ["asic1", "asic2"],
+            ["asic0", "asic2"]
+        ]
+    )
+    def test_golden_native_scope_validation_rejects_non_contiguous_namespaces(
+            self, get_cmd_module, namespaces):
+        (config, _) = get_cmd_module
+
+        with mock.patch.object(
+                config.multi_asic,
+                "get_namespace_list",
+                return_value=namespaces), \
+                pytest.raises(ValueError, match="zero-based and contiguous"):
+            config._validate_multiasic_scope_configs(
+                TestLoadGoldenConfig._valid_multiasic_golden_config()
+            )
 
     @classmethod
     def teardown_class(cls):
