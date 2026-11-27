@@ -13,6 +13,53 @@ SUPPORT_RATE_LIMIT = 'support_syslog_rate_limit'
 FEATURE_HAS_GLOBAL_SCOPE = 'has_global_scope'
 FEATURE_HAS_PER_ASIC_SCOPE = 'has_per_asic_scope'
 
+SYSLOG_FIELD_SEVERITY = 'severity'
+SYSLOG_FIELD_FACILITY = 'facility'
+
+# sonic-syslog.yang rsyslog-severity; values align with xfmr_system_syslog.go
+SYSLOG_SEVERITY_CHOICES = (
+    'none', 'debug', 'info', 'notice', 'warn', 'error', 'crit',
+)
+
+_VALID_SYSLOG_FACILITIES = frozenset({
+    '*', 'kern', 'user', 'mail', 'daemon', 'auth', 'syslog',
+    'local0', 'local1', 'local2', 'local3', 'local4', 'local5', 'local6', 'local7',
+})
+
+
+def normalize_syslog_severity(value):
+    """Return CONFIG_DB severity string."""
+    if value is None:
+        return None
+    sev = value.strip().lower()
+    aliases = {'warning': 'warn', 'err': 'error', 'critical': 'crit'}
+    sev = aliases.get(sev, sev)
+    if sev not in SYSLOG_SEVERITY_CHOICES:
+        raise click.ClickException(
+            'Invalid severity {}; choose from: {}'.format(
+                value, ', '.join(SYSLOG_SEVERITY_CHOICES))
+        )
+    return sev
+
+
+def normalize_syslog_facility(value):
+    """Return CONFIG_DB facility string."""
+    if value is None:
+        return None
+    fac = value.strip().lower().replace('-', '_')
+    if fac == 'all':
+        fac = '*'
+    oc_aliases = {
+        'kernel': 'kern',
+        'system_daemon': 'daemon',
+    }
+    fac = oc_aliases.get(fac, fac)
+    if fac not in _VALID_SYSLOG_FACILITIES:
+        raise click.ClickException(
+            'Invalid facility {}; examples: all, local4, daemon, kern'.format(value)
+        )
+    return fac
+
 
 def rate_limit_validator(interval, burst):
     """Validate input interval/burst
