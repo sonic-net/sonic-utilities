@@ -300,8 +300,13 @@ class TestDirectPlatformApiCommands(object):
         setattr(broken if command == "lpmode" else broken.api, getter, read)
         setattr(working if command == "lpmode" else working.api, getter, mock.Mock(return_value=healthy))
         resources = [(resource + "0", broken), (resource + "1", working)]
+        args = ["show", resource, command, "--json"]
         with mock.patch.object(cpoutil, "get_resource_cpo_objects", return_value=resources):
-            result = invoke(["show", resource, command, "--json"])
+            result = invoke(args)
+            if error is not None:
+                single = invoke(args + ["0"])
+                assert single.exit_code == 1
+                assert single.output == "Error: read failed\n"
         assert result.exit_code == 0, result.output
         assert json.loads(result.output) == {resource + "0": None, resource + "1": healthy}
 
@@ -989,24 +994,36 @@ class TestDirectPlatformApiCommands(object):
         assert ("Expected per-lane data" in result.output
                 or "did not return data for ELS laser" in result.output)
 
-    @pytest.mark.parametrize("command, method, value", [
-        ("status", "get_module_state", "ModuleReady"),
-        ("temperature", "get_module_temperature", 32.5),
+    @pytest.mark.parametrize("resource, command, method, value", [
+        ("els", "status", "get_module_state", "ModuleReady"),
+        ("els", "temperature", "get_module_temperature", 32.5),
+        ("oe", "status", "get_module_state", "ModuleReady"),
+        ("oe", "temperature", "get_module_temperature", 71.25),
     ])
     @pytest.mark.parametrize("selection", [[], ["0"]])
-    def test_els_query_reports_unsupported_hook(self, command, method, value, selection):
-        query = mock.Mock(side_effect=NotImplementedError("Unsupported ELS hook"))
-        els_api = mock.Mock(**{method: query})
-        self.cpo.elsfp = mock.Mock(get_api=mock.Mock(return_value=els_api))
-        args = ["show", "els", command, "--json"] + selection
-        missing = invoke(args)
-        assert missing.exit_code == 1, missing.output
-        assert "not implemented: Unsupported ELS hook" in missing.output
+    @pytest.mark.parametrize("failure", ["missing", "unimplemented"])
+    def test_module_query_reports_unsupported_hook(self, resource, command, method, value, selection, failure):
+        endpoint = mock.Mock()
+        if resource == "oe":
+            self.cpo.oe = endpoint
+        else:
+            self.cpo.elsfp = endpoint
+        if failure == "missing":
+            endpoint.get_api.return_value = mock.Mock(spec=[])
+            message = "has no attribute '{}'".format(method)
+        else:
+            endpoint.get_api.return_value = mock.Mock(
+                **{method: mock.Mock(side_effect=NotImplementedError("Unsupported module hook"))}
+            )
+            message = "Unsupported module hook"
+        args = ["show", resource, command, "--json"] + selection
+        unsupported = invoke(args)
+        assert unsupported.exit_code == 1, unsupported.output
+        assert "not implemented" in unsupported.output and message in unsupported.output
 
-        query.side_effect = None
-        query.return_value = value
+        endpoint.get_api.return_value = mock.Mock(**{method: mock.Mock(return_value=value)})
         result = invoke(args)
-        assert json.loads(result.output) == {"els0": value}
+        assert json.loads(result.output) == {resource + "0": value}
 
     def test_temperature_keeps_measurement_precision(self):
         temperature = invoke(["show", "oe", "temperature", "0"])
