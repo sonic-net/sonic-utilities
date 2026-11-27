@@ -17207,9 +17207,18 @@ Select front-panel interfaces with `-p, --port`; positional port arguments are n
 
 ## CPO Utilities show commands
 
+When a presence read fails during a bulk query, the command prints the error to
+stderr, marks the affected result as unavailable, and continues with the other
+targets. With `--json`, stdout contains the JSON result. A presence read
+failure for a single selected target returns a nonzero exit status.
+
 `cpoutil show interface dom` combines the API's cable length descriptor and
 value in both text and JSON output, for example `Length(km): 2` in text
 and `"Length(km)": 2` in JSON.
+
+A query for all interfaces keeps available DOM sections and reports failed
+reads without failing the command. A failed read for an explicitly selected
+interface returns an error.
 
 **cpoutil show interface presence**
 

@@ -912,7 +912,7 @@ class TestHelperCoverage(object):
         )
         assert cpoutil.get_oe_api(public_cpo, "oe0") is oe_api
         assert cpoutil.get_els_api(public_cpo, "els0") is els_api
-        with pytest.raises(cpoutil.CpoCommandError, match="CPO presence is not implemented"):
+        with pytest.raises(NotImplementedError, match="CPO presence is not implemented"):
             cpoutil.get_cpo_presence(public_cpo, "Ethernet0")
 
     def test_normalizers_and_filters(self):
@@ -2477,7 +2477,7 @@ def test_endpoint_lpmode_handles_non_boolean_values(
     result = invoke_coverage(["show", resource, "lpmode", "0", "--json"])
     if resource == "els":
         assert result.exit_code == 0, result.output
-        assert json.loads(result.output) == {"els0": None}
+        assert json.loads(result.output) == {"els0": value}
     else:
         assert result.exit_code != 0
         assert "get_lpmode returned invalid data" in result.output
