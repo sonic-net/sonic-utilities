@@ -345,7 +345,7 @@ def test_enable_mst_for_interfaces():
         'link_type': MST_AUTO_LINK_TYPE,
         'enabled': 'true',
         'bpdu_guard': 'false',
-        'bpdu_guard_do': 'false',
+        'bpdu_guard_do_disable': 'false',
         'root_guard': 'false',
         'path_cost': MST_DEFAULT_PORT_PATH_COST,
         'priority': MST_DEFAULT_PORT_PRIORITY
@@ -357,8 +357,8 @@ def test_enable_mst_for_interfaces():
     }
 
     # Assert that set_entry was called with the correct key names
-    mock_db.set_entry.assert_any_call('STP_MST_PORT', 'MST_INSTANCE|0|Ethernet0', expected_fvs_mst_port)
-    mock_db.set_entry.assert_any_call('STP_MST_PORT', 'MST_INSTANCE|0|PortChannel1', expected_fvs_mst_port)
+    mock_db.set_entry.assert_any_call('STP_MST_PORT', '0|Ethernet0', expected_fvs_mst_port)
+    mock_db.set_entry.assert_any_call('STP_MST_PORT', '0|PortChannel1', expected_fvs_mst_port)
     mock_db.set_entry.assert_any_call('STP_PORT', 'Ethernet0', expected_fvs_port)
     mock_db.set_entry.assert_any_call('STP_PORT', 'PortChannel1', expected_fvs_port)
 
@@ -425,7 +425,7 @@ def test_enable_mst_instance0():
 
     # Assert that set_entry was called with the correct arguments
     mock_db.set_entry.assert_called_once_with(
-        'STP_MST_INST', 'MST_INSTANCE:INSTANCE0', expected_mst_inst_fvs
+        'STP_MST_INST', '0', expected_mst_inst_fvs
     )
 
 
