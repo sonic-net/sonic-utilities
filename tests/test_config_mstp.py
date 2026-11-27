@@ -2,6 +2,7 @@ import pytest
 import click
 from unittest.mock import MagicMock, patch
 from click.testing import CliRunner
+from utilities_common.db import Db
 from config.stp import (
     get_intf_list_in_vlan_member_table,
     is_valid_root_guard_timeout,
@@ -19,8 +20,9 @@ from config.stp import (
     is_valid_max_age,
     stp_disable,
     enable_mst_instance0,
+    mst_instance,
+    mst_instance_priority,
     MST_AUTO_LINK_TYPE,
-    MST_DEFAULT_PORT_PATH_COST,
     MST_DEFAULT_PORT_PRIORITY,
     MST_DEFAULT_BRIDGE_PRIORITY,
     is_valid_stp_vlan_parameters,
@@ -238,15 +240,37 @@ def test_is_valid_stp_vlan_parameters():
 def test_enable_stp_for_vlans():
     mock_db = MagicMock()
     mock_db.get_table.return_value = ["Vlan10", "Vlan20"]
+    mock_db.get_entry.return_value = {}
 
     enable_stp_for_vlans(mock_db)
 
     mock_db.set_entry.assert_any_call('STP_VLAN', 'Vlan10', {
         'enabled': 'true',
-        'forward_delay': mock_db.get_entry.return_value.get('forward_delay'),
-        'hello_time': mock_db.get_entry.return_value.get('hello_time'),
-        'max_age': mock_db.get_entry.return_value.get('max_age'),
-        'priority': mock_db.get_entry.return_value.get('priority')
+        'forward_delay': None,
+        'hello_time': None,
+        'max_age': None,
+        'priority': None
+    })
+
+
+def test_enable_stp_for_vlans_preserves_existing_config():
+    mock_db = MagicMock()
+    mock_db.get_table.return_value = ["Vlan10"]
+
+    def get_entry(table, key):
+        if table == 'STP_VLAN' and key == 'Vlan10':
+            return {'enabled': 'false', 'priority': '4096'}
+        return {'forward_delay': '15', 'hello_time': '2', 'max_age': '20', 'priority': '32768'}
+    mock_db.get_entry.side_effect = get_entry
+
+    enable_stp_for_vlans(mock_db)
+
+    mock_db.set_entry.assert_any_call('STP_VLAN', 'Vlan10', {
+        'enabled': 'false',
+        'forward_delay': '15',
+        'hello_time': '2',
+        'max_age': '20',
+        'priority': '4096'
     })
 
 
@@ -268,9 +292,15 @@ def test_disable_global_pvst():
     disable_global_pvst(mock_db)
 
     mock_db.set_entry.assert_called_once_with('STP', "GLOBAL", None)
-    mock_db.delete_table.assert_any_call('STP_VLAN')
-    mock_db.delete_table.assert_any_call('STP_PORT')
-    mock_db.delete_table.assert_any_call('STP_VLAN_PORT')
+    mock_db.delete_table.assert_not_called()
+
+
+@pytest.fixture
+def mock_db_is_a_db(mock_db):
+    # pass_db keeps the object handed to invoke() only when it is a Db;
+    # anything else is replaced by a real Db over the mock tables.
+    mock_db.__class__ = Db
+    return mock_db
 
 
 # Define constants
@@ -285,10 +315,7 @@ def test_disable_global_mst():
     disable_global_mst(mock_db)
 
     mock_db.set_entry.assert_called_once_with('STP', "GLOBAL", None)
-    mock_db.delete_table.assert_any_call('STP_MST')
-    mock_db.delete_table.assert_any_call('STP_MST_INST')
-    mock_db.delete_table.assert_any_call('STP_MST_PORT')
-    mock_db.delete_table.assert_any_call('STP_PORT')
+    mock_db.delete_table.assert_not_called()
 
 
 def test_get_bridge_mac_address():
@@ -336,6 +363,8 @@ def test_enable_mst_for_interfaces():
         'PORTCHANNEL': {'PortChannel1': {}}
     }.get(table, {})
 
+    mock_db.get_entry.return_value = {}
+
     # Mock the return value of get_intf_list_in_vlan_member_table
     with patch('config.stp.get_intf_list_in_vlan_member_table', return_value=['Ethernet0', 'PortChannel1']):
         enable_mst_for_interfaces(mock_db)
@@ -345,25 +374,55 @@ def test_enable_mst_for_interfaces():
         'link_type': MST_AUTO_LINK_TYPE,
         'enabled': 'true',
         'bpdu_guard': 'false',
-        'bpdu_guard_do': 'false',
+        'bpdu_guard_do_disable': 'false',
         'root_guard': 'false',
-        'path_cost': MST_DEFAULT_PORT_PATH_COST,
         'priority': MST_DEFAULT_PORT_PRIORITY
     }
 
     expected_fvs_mst_port = {
-        'path_cost': MST_DEFAULT_PORT_PATH_COST,
         'priority': MST_DEFAULT_PORT_PRIORITY
     }
 
     # Assert that set_entry was called with the correct key names
-    mock_db.set_entry.assert_any_call('STP_MST_PORT', 'MST_INSTANCE|0|Ethernet0', expected_fvs_mst_port)
-    mock_db.set_entry.assert_any_call('STP_MST_PORT', 'MST_INSTANCE|0|PortChannel1', expected_fvs_mst_port)
+    mock_db.set_entry.assert_any_call('STP_MST_PORT', '0|Ethernet0', expected_fvs_mst_port)
+    mock_db.set_entry.assert_any_call('STP_MST_PORT', '0|PortChannel1', expected_fvs_mst_port)
     mock_db.set_entry.assert_any_call('STP_PORT', 'Ethernet0', expected_fvs_port)
     mock_db.set_entry.assert_any_call('STP_PORT', 'PortChannel1', expected_fvs_port)
 
     # Ensure the correct number of calls were made to set_entry
     assert mock_db.set_entry.call_count == 4
+
+
+def test_enable_mst_for_interfaces_preserves_existing_config():
+    mock_db = MagicMock()
+    mock_db.get_table.side_effect = lambda table: {
+        'PORT': {'Ethernet0': {}},
+        'PORTCHANNEL': {}
+    }.get(table, {})
+
+    def get_entry(table, key):
+        if table == 'STP_PORT' and key == 'Ethernet0':
+            return {'bpdu_guard': 'true', 'root_guard': 'true', 'enabled': 'false'}
+        if table == 'STP_MST_PORT' and key == '0|Ethernet0':
+            return {'priority': '64'}
+        return {}
+    mock_db.get_entry.side_effect = get_entry
+
+    with patch('config.stp.get_intf_list_in_vlan_member_table', return_value=['Ethernet0']):
+        enable_mst_for_interfaces(mock_db)
+
+    mock_db.set_entry.assert_any_call('STP_MST_PORT', '0|Ethernet0', {
+        'priority': '64'
+    })
+    mock_db.set_entry.assert_any_call('STP_PORT', 'Ethernet0', {
+        'edge_port': 'false',
+        'link_type': MST_AUTO_LINK_TYPE,
+        'enabled': 'false',
+        'bpdu_guard': 'true',
+        'bpdu_guard_do_disable': 'false',
+        'root_guard': 'true',
+        'priority': MST_DEFAULT_PORT_PRIORITY
+    })
 
 
 def test_check_if_global_stp_enabled():
@@ -420,12 +479,25 @@ def test_enable_mst_instance0():
         'bridge_priority': MST_DEFAULT_BRIDGE_PRIORITY
     }
 
+    mock_db.get_entry.return_value = {}
+
     # Call the function with the mock database
     enable_mst_instance0(mock_db)
 
     # Assert that set_entry was called with the correct arguments
     mock_db.set_entry.assert_called_once_with(
-        'STP_MST_INST', 'MST_INSTANCE:INSTANCE0', expected_mst_inst_fvs
+        'STP_MST_INST', '0', expected_mst_inst_fvs
+    )
+
+
+def test_enable_mst_instance0_preserves_existing_priority():
+    mock_db = MagicMock()
+    mock_db.get_entry.return_value = {'bridge_priority': '4096'}
+
+    enable_mst_instance0(mock_db)
+
+    mock_db.set_entry.assert_called_once_with(
+        'STP_MST_INST', '0', {'bridge_priority': '4096'}
     )
 
 
@@ -643,6 +715,39 @@ class TestSpanningTreeEnable:
                 })
                 mock_enable_interfaces.assert_called_once()
                 mock_enable_instance0.assert_called_once()
+
+    @pytest.mark.usefixtures("mock_db_is_a_db")
+    def test_enable_pvst_drops_leftover_mst_tables(self, mock_db):
+        mock_db.cfgdb.get_entry.side_effect = lambda table, entry: {}
+
+        with patch('config.stp.enable_stp_for_interfaces'), \
+             patch('config.stp.enable_stp_for_vlans'):
+            runner = CliRunner()
+            result = runner.invoke(spanning_tree_enable, ['pvst'], obj=mock_db)
+
+        assert result.exit_code == 0
+        mock_db.cfgdb.delete_table.assert_any_call('STP_MST')
+        mock_db.cfgdb.delete_table.assert_any_call('STP_MST_INST')
+        mock_db.cfgdb.delete_table.assert_any_call('STP_MST_PORT')
+        deleted = [c.args[0] for c in mock_db.cfgdb.delete_table.call_args_list]
+        assert 'STP_PORT' not in deleted
+        assert 'STP_VLAN' not in deleted
+
+    @pytest.mark.usefixtures("mock_db_is_a_db")
+    def test_enable_mst_drops_leftover_pvst_tables(self, mock_db):
+        mock_db.cfgdb.get_entry.side_effect = lambda table, entry: {}
+
+        with patch('config.stp.enable_mst_for_interfaces'), \
+             patch('config.stp.enable_mst_instance0'):
+            runner = CliRunner()
+            result = runner.invoke(spanning_tree_enable, ['mst'], obj=mock_db)
+
+        assert result.exit_code == 0
+        mock_db.cfgdb.delete_table.assert_any_call('STP_VLAN')
+        mock_db.cfgdb.delete_table.assert_any_call('STP_VLAN_PORT')
+        deleted = [c.args[0] for c in mock_db.cfgdb.delete_table.call_args_list]
+        assert 'STP_PORT' not in deleted
+        assert 'STP_MST' not in deleted
 
 
 class TestSpanningTreeInterfaceedge_portEnable:
@@ -1003,3 +1108,154 @@ def test_stp_interface_link_type_missing_interface(
     # Assert
     assert result.exit_code != 0
     assert "Missing argument" in result.output
+
+
+@pytest.mark.usefixtures("mock_db_is_a_db")
+def test_mst_instance_priority_creates_missing_instance(mock_db, patch_functions):
+    # Only the CIST is created automatically, so setting a priority has to be
+    # able to bring a new instance into existence.
+    runner = CliRunner()
+
+    result = runner.invoke(mst_instance, ['1', 'priority', '32768'], obj=mock_db)
+
+    assert result.exit_code == 0, result.output
+    assert "MST instance 1 created." in result.output
+    mock_db.mod_entry.assert_called_with('STP_MST_INST', '1', {'bridge_priority': '32768'})
+
+
+@pytest.mark.usefixtures("mock_db_is_a_db")
+def test_mst_instance_priority_existing_instance_not_reannounced(mock_db, patch_functions):
+    with patch.object(mock_db, 'get_entry', return_value={'bridge_priority': '32768'}):
+        runner = CliRunner()
+
+        result = runner.invoke(mst_instance, ['1', 'priority', '4096'], obj=mock_db)
+
+        assert result.exit_code == 0, result.output
+        assert "created" not in result.output
+        mock_db.mod_entry.assert_called_with('STP_MST_INST', '1', {'bridge_priority': '4096'})
+
+
+def test_mst_instance_priority_invalid_does_not_create(mock_db, patch_functions):
+    # A rejected priority must not leave a half-configured instance behind.
+    runner = CliRunner()
+
+    result = runner.invoke(mst_instance, ['1', 'priority', '1000'], obj=mock_db)
+
+    assert result.exit_code != 0
+    assert "multiple of 4096" in result.output
+    mock_db.mod_entry.assert_not_called()
+
+
+@pytest.mark.usefixtures("mock_db_is_a_db")
+def test_mst_instance_priority_refused_at_the_hardware_limit(mock_db, patch_functions):
+    # The CIST takes one of the hardware's instances, so with two in hardware
+    # and one MSTI configured there is no room for a second MSTI.
+    mock_db.db = MagicMock()
+    mock_db.db.get.return_value = "2"
+    mock_db.cfgdb.get_table.return_value = {'0': {'bridge_priority': '32768'},
+                                            '1': {'bridge_priority': '8192'}}
+    runner = CliRunner()
+
+    result = runner.invoke(mst_instance, ['2', 'priority', '32768'], obj=mock_db)
+
+    assert result.exit_code != 0
+    assert "holds 2 spanning tree instances" in result.output
+    mock_db.mod_entry.assert_not_called()
+
+
+@pytest.mark.usefixtures("mock_db_is_a_db")
+def test_mst_instance_priority_existing_instance_is_not_counted_against_the_limit(mock_db, patch_functions):
+    mock_db.db = MagicMock()
+    mock_db.db.get.return_value = "2"
+    mock_db.cfgdb.get_table.return_value = {'0': {'bridge_priority': '32768'},
+                                            '1': {'bridge_priority': '8192'}}
+    with patch.object(mock_db, 'get_entry', return_value={'bridge_priority': '8192'}):
+        runner = CliRunner()
+
+        result = runner.invoke(mst_instance, ['1', 'priority', '4096'], obj=mock_db)
+
+        assert result.exit_code == 0, result.output
+        mock_db.mod_entry.assert_called_with('STP_MST_INST', '1', {'bridge_priority': '4096'})
+
+
+def test_mst_instance_priority_out_of_range_instance(mock_db, patch_functions):
+    runner = CliRunner()
+
+    result = runner.invoke(mst_instance, ['63', 'priority', '32768'], obj=mock_db)
+
+    assert result.exit_code != 0
+    assert "Instance ID must be in range" in result.output
+    mock_db.mod_entry.assert_not_called()
+
+
+# `config spanning-tree vlan interface cost` validates its cost through the
+# shared `is_valid_interface_cost`. These two tests invoke the real command body
+# instead of mocking it, so a validator that is renamed or removed fails here
+# rather than raising NameError on a switch.
+@pytest.fixture
+def _vlan_interface_guards():
+    with patch('config.stp.check_if_stp_enabled_for_vlan'), \
+         patch('config.stp.check_if_stp_enabled_for_interface'), \
+         patch('config.stp.check_if_vlan_exist_in_db'), \
+         patch('config.stp.is_interface_vlan_member'):
+        yield
+
+
+@pytest.mark.usefixtures("mock_db_is_a_db")
+def test_stp_vlan_interface_cost_writes_the_path_cost(mock_db, _vlan_interface_guards):
+    from config.stp import stp_vlan_interface_cost
+
+    result = CliRunner().invoke(
+        stp_vlan_interface_cost, ["100", "Ethernet4", "1000"], obj=mock_db)
+
+    assert result.exit_code == 0, result.output
+    mock_db.cfgdb.mod_entry.assert_called_with(
+        'STP_VLAN_PORT', 'Vlan100|Ethernet4', {'path_cost': 1000})
+
+
+def test_stp_vlan_interface_cost_rejects_an_out_of_range_cost(mock_db, _vlan_interface_guards):
+    from config.stp import stp_vlan_interface_cost
+
+    result = CliRunner().invoke(
+        stp_vlan_interface_cost, ["100", "Ethernet4", "200000001"], obj=mock_db)
+
+    assert result.exit_code != 0
+    assert "must be in range 1-200000000" in result.output
+
+
+# stpd applies the mode it finds at start, so writing CONFIG_DB is not enough
+# to change the running protocol. Enabling a mode must reach the daemons, or
+# the command reports success and leaves the switch in the previous mode.
+@pytest.mark.usefixtures("mock_db_is_a_db")
+@pytest.mark.parametrize("mode", ["pvst", "mst"])
+def test_spanning_tree_enable_writes_the_mode_and_leaves_the_service_alone(mock_db, mode):
+    from config.stp import spanning_tree_enable
+
+    with patch('config.stp.get_global_stp_mode', return_value=''), \
+         patch('config.stp.clicommon.run_command') as run_command:
+        result = CliRunner().invoke(spanning_tree_enable, [mode], obj=mock_db)
+
+    assert result.exit_code == 0, result.output
+    # The mode reaches the daemons through CONFIG_DB; nothing is restarted.
+    assert not run_command.called, run_command.call_args
+    written = [c for c in mock_db.cfgdb.set_entry.call_args_list
+               if c[0][:2] == ('STP', 'GLOBAL')]
+    assert written, "the STP|GLOBAL row was not written"
+    assert written[-1][0][2]['mode'] == mode
+
+
+# An unset path cost leaves the daemon on its speed derived default, which is
+# what 802.1Q asks for. Seeding a fixed value makes every link cost the same
+# whatever its speed, so cost based path selection cannot be influenced.
+def test_enable_mst_does_not_seed_a_port_path_cost(mock_db):
+    from config.stp import enable_mst_for_interfaces
+
+    mock_db.get_table.return_value = ['Ethernet0']
+    with patch('config.stp.get_intf_list_in_vlan_member_table', return_value=['Ethernet0']):
+        enable_mst_for_interfaces(mock_db)
+
+    for call in mock_db.set_entry.call_args_list:
+        table, _, fvs = call[0][0], call[0][1], call[0][2]
+        if table in ('STP_PORT', 'STP_MST_PORT'):
+            assert 'path_cost' not in fvs, \
+                "{} was seeded with a path cost: {}".format(table, fvs)

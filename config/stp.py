@@ -43,6 +43,7 @@
     === config spanning_tree mst revision <number>
 
     config spanning_tree mst instance <instance-id> priority <bridge-priority-value>
+    config spanning_tree mst instance <instance-id> delete
 
     config spanning_tree mst instance <instance-id> vlan add <vlan-id>
     config spanning_tree mst instance <instance-id> vlan del <vlan-id>
@@ -62,6 +63,7 @@
 
 import click
 import utilities_common.cli as clicommon
+from swsscommon.swsscommon import SonicV2Connector
 from natsort import natsorted
 import logging
 
@@ -105,11 +107,24 @@ MST_DEFAULT_INSTANCE = 0
 
 MST_MIN_PORT_PATH_COST = 1
 MST_MAX_PORT_PATH_COST = 200000000
-MST_DEFAULT_PORT_PATH_COST = 1
 
 MST_AUTO_LINK_TYPE = 'auto'
 MST_P2P_LINK_TYPE = 'p2p'
 MST_SHARED_LINK_TYPE = 'shared'
+
+# STP_PORT fields the YANG restricts to one mode. link_type carries an
+# unconditional must, so it is invalid the moment the mode is not mst, and
+# invalid again while no STP|GLOBAL row exists at all. portfast and edge_port
+# are only invalid when true. Disabling a mode therefore has to take its own
+# fields off every port row, or a preserved row fails validation.
+PVST_ONLY_PORT_FIELDS = ('portfast', 'uplink_fast')
+MST_ONLY_PORT_FIELDS = ('edge_port', 'link_type')
+
+# Defaults for an STP_MST_PORT row. No path_cost: an unset cost lets the daemon
+# derive one from the port's speed, which is what 802.1Q asks for.
+MST_PORT_DEFAULT_FVS = {
+    'priority': MST_DEFAULT_PORT_PRIORITY
+}
 
 # STP parameters
 
@@ -221,8 +236,24 @@ def is_valid_stp_global_parameters(ctx, db, param_type, new_value):
         ctx.fail("2*(forward_delay-1) >= max_age >= 2*(hello_time +1 ) not met")
 
 
-def get_max_stp_instances():
+def get_max_stp_instances(state_db=None):
+    """The number of spanning tree instances the hardware holds, which orchagent
+    publishes in STATE_DB; the protocol maximum when it has not yet."""
+    if state_db is None:
+        state_db = SonicV2Connector(host="127.0.0.1")
+        state_db.connect(state_db.STATE_DB)
+    value = state_db.get(state_db.STATE_DB, "STP_TABLE|GLOBAL", "max_stp_inst")
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
     return PVST_MAX_INSTANCES
+
+
+def get_mst_instance_count(db):
+    """MST instances the configuration holds; the CIST takes one whether or
+    not its row exists."""
+    instances = set(db.get_table('STP_MST_INST').keys())
+    instances.add('0')
+    return len(instances)
 
 
 def update_stp_vlan_parameter(ctx, db, param_type, new_value):
@@ -248,7 +279,7 @@ def check_if_vlan_exist_in_db(db, ctx, vid):
         ctx.fail("{} doesn't exist".format(vlan_name))
 
 
-def enable_stp_for_vlans(db):
+def enable_stp_for_vlans(db, state_db=None):
     vlan_count = 0
     fvs = {'enabled': 'true',
            'forward_delay': get_global_stp_forward_delay(db),
@@ -257,12 +288,16 @@ def enable_stp_for_vlans(db):
            'priority': get_global_stp_priority(db)
            }
     vlan_dict = natsorted(db.get_table('VLAN'))
-    max_stp_instances = get_max_stp_instances()
+    max_stp_instances = get_max_stp_instances(state_db)
     for vlan_key in vlan_dict:
         if vlan_count >= max_stp_instances:
-            logging.warning("Exceeded maximum STP configurable VLAN instances for {}".format(vlan_key))
+            skipped = vlan_dict[vlan_dict.index(vlan_key):]
+            message = ("The hardware holds {} spanning tree instances; spanning tree is not enabled on {}"
+                       .format(max_stp_instances, ", ".join(skipped)))
+            logging.warning(message)
+            click.echo(message)
             break
-        db.set_entry('STP_VLAN', vlan_key, fvs)
+        merge_entry_defaults(db, 'STP_VLAN', vlan_key, fvs)
         vlan_count += 1
 
 
@@ -275,7 +310,14 @@ def get_stp_enabled_vlan_count(db):
     return count
 
 
-def vlan_enable_stp(db, vlan_name):
+def vlan_enable_stp(db, vlan_name, state_db=None):
+    # STP_VLAN is a PVST-only table. In MST mode the STP|GLOBAL entry carries
+    # only `mode` (no forward_delay/hello_time/max_age/priority), so seeding a
+    # STP_VLAN row here would write None for those fields -> stored as the string
+    # "None", which stpmgrd cannot parse.
+    # Only seed under PVST, where the global timers are populated.
+    if get_global_stp_mode(db) != "pvst":
+        return
     fvs = {'enabled': 'true',
            'forward_delay': get_global_stp_forward_delay(db),
            'hello_time': get_global_stp_hello_time(db),
@@ -283,10 +325,29 @@ def vlan_enable_stp(db, vlan_name):
            'priority': get_global_stp_priority(db)
            }
     if is_global_stp_enabled(db):
-        if get_stp_enabled_vlan_count(db) < get_max_stp_instances():
+        max_stp_instances = get_max_stp_instances(state_db)
+        if get_stp_enabled_vlan_count(db) < max_stp_instances:
             db.set_entry('STP_VLAN', vlan_name, fvs)
         else:
-            logging.warning("Exceeded maximum STP configurable VLAN instances for {}".format(vlan_name))
+            message = ("The hardware holds {} spanning tree instances; spanning tree is not enabled on {}"
+                       .format(max_stp_instances, vlan_name))
+            logging.warning(message)
+            click.echo(message)
+
+
+def merge_entry_defaults(db, table, key, defaults):
+    # Rewrite the full row so preserved values win over defaults and the
+    # daemon sees a fresh event for config that predates the enable.
+    entry = db.get_entry(table, key)
+    db.set_entry(table, key, {**defaults, **entry})
+
+
+def replay_table(db, table):
+    # Write every row back unchanged. stpmgrd acts on change events only, so
+    # rows kept through a disable are not sent to stpd again on enable
+    # unless they are rewritten.
+    for key, entry in db.get_table(table).items():
+        db.set_entry(table, key, entry)
 
 
 def interface_enable_stp(db, interface_name):
@@ -371,12 +432,12 @@ def enable_stp_for_interfaces(db):
 
     for port_key in port_dict:
         if port_key in intf_list_in_vlan_member_table:
-            db.set_entry('STP_PORT', port_key, fvs)
+            merge_entry_defaults(db, 'STP_PORT', port_key, fvs)
 
     po_ch_dict = natsorted(db.get_table('PORTCHANNEL'))
     for po_ch_key in po_ch_dict:
         if po_ch_key in intf_list_in_vlan_member_table:
-            db.set_entry('STP_PORT', po_ch_key, fvs)
+            merge_entry_defaults(db, 'STP_PORT', po_ch_key, fvs)
 
 
 def is_global_stp_enabled(db):
@@ -435,7 +496,8 @@ def enable_mst_instance0(db):
         'bridge_priority': MST_DEFAULT_BRIDGE_PRIORITY
     }
     instance_id = 0
-    db.set_entry('STP_MST_INST', f"MST_INSTANCE:INSTANCE{instance_id}", mst_inst_fvs)
+    # Key maps to YANG STP_MST_INST_LIST key "instance": STP_MST_INST|<id>.
+    merge_entry_defaults(db, 'STP_MST_INST', f"{instance_id}", mst_inst_fvs)
 
 
 def enable_mst_for_interfaces(db):
@@ -444,45 +506,55 @@ def enable_mst_for_interfaces(db):
         'link_type': MST_AUTO_LINK_TYPE,
         'enabled': 'true',
         'bpdu_guard': 'false',
-        'bpdu_guard_do': 'false',
+        'bpdu_guard_do_disable': 'false',
         'root_guard': 'false',
-        'path_cost': MST_DEFAULT_PORT_PATH_COST,
         'priority': MST_DEFAULT_PORT_PRIORITY
         }
 
-    fvs_mst_port = {
-        'path_cost': MST_DEFAULT_PORT_PATH_COST,
-        'priority': MST_DEFAULT_PORT_PRIORITY
-        }
+    fvs_mst_port = MST_PORT_DEFAULT_FVS
 
     port_dict = natsorted(db.get_table('PORT'))
     intf_list_in_vlan_member_table = get_intf_list_in_vlan_member_table(db)
 
     for port_key in port_dict:
         if port_key in intf_list_in_vlan_member_table:
-            db.set_entry('STP_MST_PORT', f"MST_INSTANCE|0|{port_key}", fvs_mst_port)
-            db.set_entry('STP_PORT', port_key, fvs_port)
+            # Key maps to YANG STP_MST_PORT_LIST key "inst_id ifname": STP_MST_PORT|<id>|<intf>.
+            merge_entry_defaults(db, 'STP_MST_PORT', f"0|{port_key}", fvs_mst_port)
+            merge_entry_defaults(db, 'STP_PORT', port_key, fvs_port)
 
     po_ch_dict = natsorted(db.get_table('PORTCHANNEL'))
     for po_ch_key in po_ch_dict:
         if po_ch_key in intf_list_in_vlan_member_table:
-            db.set_entry('STP_MST_PORT', f"MST_INSTANCE|0|{po_ch_key}", fvs_mst_port)
-            db.set_entry('STP_PORT', po_ch_key, fvs_port)
+            merge_entry_defaults(db, 'STP_MST_PORT', f"0|{po_ch_key}", fvs_mst_port)
+            merge_entry_defaults(db, 'STP_PORT', po_ch_key, fvs_port)
+
+
+def strip_mode_port_fields(db, fields):
+    # Drop this mode's fields from every port row, leaving the rest of the row
+    # intact. Their YANG must clauses reference the global mode, so they cannot
+    # outlive it.
+    #
+    # set_entry with the filtered row, not mod_entry with None values: mod_entry
+    # merges, so a None would be written as the string "None" rather than
+    # removing the field.
+    for interface_name, entry in db.get_table('STP_PORT').items():
+        remaining = {k: v for k, v in entry.items() if k not in fields}
+        if len(remaining) != len(entry):
+            db.set_entry('STP_PORT', interface_name, remaining or None)
 
 
 def disable_global_pvst(db):
+    # Stop the protocol only: per-VLAN and per-port config (guards, timers,
+    # costs) stays in CONFIG_DB and survives a disable/enable cycle.
     db.set_entry('STP', "GLOBAL", None)
-    db.delete_table('STP_VLAN')
-    db.delete_table('STP_PORT')
-    db.delete_table('STP_VLAN_PORT')
+    strip_mode_port_fields(db, PVST_ONLY_PORT_FIELDS)
 
 
 def disable_global_mst(db):
+    # Stop the protocol only: region identity, instances, and per-port config
+    # stay in CONFIG_DB and survive a disable/enable cycle.
     db.set_entry('STP', "GLOBAL", None)
-    db.delete_table('STP_MST')
-    db.delete_table('STP_MST_INST')
-    db.delete_table('STP_MST_PORT')
-    db.delete_table('STP_PORT')
+    strip_mode_port_fields(db, MST_ONLY_PORT_FIELDS)
 
 
 @click.group()
@@ -518,6 +590,12 @@ def spanning_tree_enable(_db, mode):
         ctx.fail("PVST is already configured; please disable PVST before enabling MST")
 
     if mode == "pvst":
+        # Config preserved by a disable is only re-applied for the same mode:
+        # entering PVST drops any MST tables left behind by an earlier MST run.
+        db.delete_table('STP_MST')
+        db.delete_table('STP_MST_INST')
+        db.delete_table('STP_MST_PORT')
+
         fvs = {'mode': mode,
                'rootguard_timeout': STP_DEFAULT_ROOT_GUARD_TIMEOUT,
                'forward_delay': STP_DEFAULT_FORWARD_DELAY,
@@ -528,21 +606,31 @@ def spanning_tree_enable(_db, mode):
         db.set_entry('STP', "GLOBAL", fvs)
 
         enable_stp_for_interfaces(db)
-        enable_stp_for_vlans(db)  # Enable STP for VLAN by default
+        enable_stp_for_vlans(db, _db.db)  # Enable STP for VLAN by default
+        replay_table(db, 'STP_VLAN_PORT')
 
     elif mode == "mst":
+        # Entering MST drops any PVST tables left behind by an earlier PVST
+        # run; shared STP_PORT rows are kept for both modes.
+        db.delete_table('STP_VLAN')
+        db.delete_table('STP_VLAN_PORT')
+
         fvs = {'mode': mode
                }
         db.set_entry('STP', "GLOBAL", fvs)
 
+        replay_table(db, 'STP_MST')
         enable_mst_for_interfaces(db)
         enable_mst_instance0(db)
+        # Instances before their port rows, the order they are created in.
+        replay_table(db, 'STP_MST_INST')
+        replay_table(db, 'STP_MST_PORT')
 
 
 # cmd: STP disable
-# config spanning_tree disable <pvst|mst> (Modify mode parameter for MST or PVST and Delete tables)
-# Modify mode in STP GLOBAL table to None
-# Delete tables STP_MST, STP_MST_INST, STP_MST_PORT, and STP_PORT
+# config spanning_tree disable <pvst|mst>
+# Clears the STP GLOBAL entry to stop the protocol; all other STP tables are
+# preserved so existing config is applied again on the next enable
 @spanning_tree.command('disable')
 @click.argument('mode', metavar='<pvst|mst>', required=True, type=click.Choice(["pvst", "mst"]))
 @clicommon.pass_db
@@ -840,8 +928,10 @@ def stp_vlan_enable(_db, vid):
         vlan_name = 'Vlan{}'.format(vid)
         if is_stp_enabled_for_vlan(db, vlan_name):
             ctx.fail("STP is already enabled for " + vlan_name)
-        if get_stp_enabled_vlan_count(db) >= get_max_stp_instances():
-            ctx.fail("Exceeded maximum STP configurable VLAN instances")
+        max_stp_instances = get_max_stp_instances(_db.db)
+        if get_stp_enabled_vlan_count(db) >= max_stp_instances:
+            ctx.fail("The hardware holds {} spanning tree instances and every one is in use. "
+                     "Disable spanning tree on another VLAN first".format(max_stp_instances))
         check_if_global_stp_enabled(db, ctx)
         stp_vlan_entry = db.get_entry('STP_VLAN', vlan_name)
         if len(stp_vlan_entry) == 0:
@@ -1023,41 +1113,6 @@ STP_INTERFACE_DEFAULT_PRIORITY = 128
 def is_valid_interface_priority(ctx, intf_priority):
     if intf_priority not in range(STP_INTERFACE_MIN_PRIORITY, STP_INTERFACE_MAX_PRIORITY + 1):
         ctx.fail("STP interface priority must be in range 0-240")
-
-
-# STP interface port path cost
-STP_INTERFACE_MIN_PATH_COST = 1
-STP_INTERFACE_MAX_PATH_COST = 200000000
-
-
-def is_valid_interface_path_cost(ctx, intf_path_cost):
-    if intf_path_cost < STP_INTERFACE_MIN_PATH_COST or intf_path_cost > STP_INTERFACE_MAX_PATH_COST:
-        ctx.fail("STP interface path cost must be in range 1-200000000")
-
-
-# config spanning_tree interface cost <interface_name> <value: 1-200000000>
-@spanning_tree_interface.command('cost')
-@click.argument('interface_name', metavar='<interface_name>', required=True)
-@click.argument('cost', metavar='<1-200000000>', required=True, type=int)
-@clicommon.pass_db
-def stp_interface_path_cost(_db, interface_name, cost):
-    """Configure STP path cost for interface"""
-    ctx = click.get_current_context()
-    db = _db.cfgdb
-    check_if_stp_enabled_for_interface(ctx, db, interface_name)
-    check_if_interface_is_valid(ctx, db, interface_name)
-    is_valid_interface_path_cost(ctx, cost)
-    curr_intf_cost = db.get_entry('STP_PORT', interface_name).get('path_cost')
-    db.mod_entry('STP_PORT', interface_name, {'path_cost': cost})
-    # update interface path_cost in all stp_vlan_intf entries if entry exists
-    for vlan, intf in db.get_table('STP_VLAN_PORT'):
-        if intf == interface_name:
-            vlan_intf_key = "{}|{}".format(vlan, interface_name)
-            vlan_intf_entry = db.get_entry('STP_VLAN_PORT', vlan_intf_key)
-            if len(vlan_intf_entry) != 0:
-                vlan_intf_cost = vlan_intf_entry.get('path_cost')
-                if curr_intf_cost == vlan_intf_cost:
-                    db.mod_entry('STP_VLAN_PORT', vlan_intf_key, {'path_cost': cost})
 
 
 # STP interface portfast
@@ -1316,7 +1371,7 @@ def stp_vlan_interface_cost(_db, vid, interface_name, cost):
     check_if_stp_enabled_for_interface(ctx, db, interface_name)
     check_if_vlan_exist_in_db(db, ctx, vid)
     is_interface_vlan_member(db, vlan_name, interface_name)
-    is_valid_interface_path_cost(ctx, cost)
+    is_valid_interface_cost(ctx, cost)
     vlan_interface = str(vlan_name) + "|" + interface_name
     db.mod_entry('STP_VLAN_PORT', vlan_interface, {'path_cost': cost})
 
@@ -1533,6 +1588,27 @@ def stp_interface_root_guard_disable(_db, interface_name):
     db.mod_entry('STP_PORT', interface_name, fvs)
 
 
+def _set_cist_port_field(db, interface_name, field, value):
+    """Mirror an interface-level cost or priority into the CIST row in MST mode.
+
+    stpd applies STP_PORT path_cost and priority to every instance as a
+    port-wide default, but skips any instance that has its own STP_MST_PORT
+    value. Enabling MST seeds STP_MST_PORT|0|<port> for every member port, so
+    the CIST always has one, and a value written only to STP_PORT never
+    reaches it. Writing the CIST row here is what makes the interface-level
+    command take effect in MST mode. The MSTIs still inherit from STP_PORT
+    unless the per-instance command has set them.
+    """
+    if get_global_stp_mode(db) != "mst":
+        return
+    key = f"0|{interface_name}"
+    # A port enrolled after the enable has no CIST row yet, so seed the rest of
+    # the row alongside the field being set.
+    fvs = {} if db.get_entry('STP_MST_PORT', key) else dict(MST_PORT_DEFAULT_FVS)
+    fvs[field] = str(value)
+    db.mod_entry('STP_MST_PORT', key, fvs)
+
+
 # config spanning_tree interface priority <ifname> <port_priority-value>
 # Specify configuring the port level priority for root bridge in seconds.
 # Default: 128, range 0-240
@@ -1572,6 +1648,7 @@ def stp_interface_priority(_db, interface_name, priority_value):
 
     # Update the database entry
     db.mod_entry('STP_PORT', interface_name, fvs)
+    _set_cist_port_field(db, interface_name, 'priority', priority_value)
 
 
 # config spanning_tree interface cost <ifname> <cost-value>
@@ -1619,6 +1696,7 @@ def stp_interface_cost(_db, interface_name, cost):
         db.set_entry('STP_PORT', interface_name, fvs)
     else:
         db.mod_entry('STP_PORT', interface_name, {'path_cost': cost})
+    _set_cist_port_field(db, interface_name, 'path_cost', cost)
 
 
 # config spanning_tree interface link-type {P2P|Shared-Lan|Auto} <ifname>
@@ -1684,26 +1762,31 @@ def stp_interface_link_type_set(_db, link_type, interface_name):
 # Supported Instances : 64
 
 @mst.group('instance')
-def mst_instance():
+@click.argument('instance_id', metavar='<instance-id>', required=True, type=int)
+@click.pass_context
+def mst_instance(ctx, instance_id):
     """Configure MSTP instance settings"""
-    pass
+    # Stash on ctx.meta rather than ctx.obj, which pass_db owns.
+    ctx.meta['mst_instance_id'] = instance_id
 
 
 @mst_instance.group('interface')
-def mst_instance_interface():
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.pass_context
+def mst_instance_interface(ctx, interface_name):
     """Configure MSTP instance interface settings"""
-    pass
+    ctx.meta['mst_interface_name'] = interface_name
 
 
 @mst_instance_interface.command('priority')
-@click.argument('instance_id', metavar='<instance-id>', required=True, type=int)
-@click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.argument('priority', metavar='<0-240>', required=True, type=int)
 @clicommon.pass_db
-def mst_instance_interface_priority(_db, instance_id, interface_name, priority):
+def mst_instance_interface_priority(_db, priority):
     """Configure priority of an interface for an MST instance"""
     ctx = click.get_current_context()
     db = _db.cfgdb
+    instance_id = ctx.meta['mst_instance_id']
+    interface_name = ctx.meta['mst_interface_name']
 
     # Validate instance_id
     if instance_id < 0 or instance_id >= MST_MAX_INSTANCES:
@@ -1717,7 +1800,7 @@ def mst_instance_interface_priority(_db, instance_id, interface_name, priority):
     check_if_interface_is_valid(ctx, db, interface_name)
 
     # Construct the key and field-value dictionary
-    mst_instance_interface_key = f"MST_INSTANCE|{instance_id}|{interface_name}"
+    mst_instance_interface_key = f"{instance_id}|{interface_name}"
     fvs = {'priority': str(priority)}
 
     # Update the database entry
@@ -1732,14 +1815,14 @@ def mst_instance_interface_priority(_db, instance_id, interface_name, priority):
 # cost-value: Range: 1-200000000
 
 @mst_instance_interface.command('cost')
-@click.argument('instance_id', metavar='<instance-id>', required=True, type=int)
-@click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.argument('cost', metavar='<1-200000000>', required=True, type=int)
 @clicommon.pass_db
-def mst_instance_interface_cost(_db, instance_id, interface_name, cost):
+def mst_instance_interface_cost(_db, cost):
     """Configure path cost of an interface for an MST instance."""
     ctx = click.get_current_context()
     db = _db.cfgdb
+    instance_id = ctx.meta['mst_instance_id']
+    interface_name = ctx.meta['mst_interface_name']
 
     # Validate MST mode
     mode = get_global_stp_mode(db)
@@ -1758,7 +1841,7 @@ def mst_instance_interface_cost(_db, instance_id, interface_name, cost):
     check_if_interface_is_valid(ctx, db, interface_name)
 
     # Prepare key and value for database update
-    mst_instance_interface_key = f"MST_INSTANCE|{instance_id}|{interface_name}"
+    mst_instance_interface_key = f"{instance_id}|{interface_name}"
     fvs = {'path_cost': str(cost)}
 
     # Update database entry
@@ -1768,24 +1851,19 @@ def mst_instance_interface_cost(_db, instance_id, interface_name, cost):
 
 # Add under mst_instance group in stp.py
 @mst_instance.command('priority')
-@click.argument('instance_id', metavar='<instance-id>', required=True, type=int)
 @click.argument('priority_value', metavar='<0-61440>', required=True, type=int)
 @clicommon.pass_db
-def mst_instance_priority(_db, instance_id, priority_value):
+def mst_instance_priority(_db, priority_value):
     """
     Configure bridge priority for an MST instance.
     """
     ctx = click.get_current_context()
     db = _db.cfgdb
+    instance_id = ctx.meta['mst_instance_id']
 
     # Validate instance_id range
     if not (0 <= instance_id < MST_MAX_INSTANCES):
         ctx.fail(f"Instance ID must be in range 0-{MST_MAX_INSTANCES - 1}")
-
-    # Check if instance exists
-    instance_key = f"MST_INSTANCE|{instance_id}"
-    if not db.get_entry('STP_MST_INST', instance_key):
-        ctx.fail(f"MST instance {instance_id} does not exist. Please create it first.")
 
     # Validate priority: must be multiple of 4096 and within range
     if priority_value % 4096 != 0 or not (MST_MIN_BRIDGE_PRIORITY <= priority_value <= MST_MAX_BRIDGE_PRIORITY):
@@ -1794,8 +1872,19 @@ def mst_instance_priority(_db, instance_id, priority_value):
             f"{MST_MIN_BRIDGE_PRIORITY}-{MST_MAX_BRIDGE_PRIORITY}."
         )
 
-    # Update the instance priority
+    # Setting a priority is what brings an instance into existence. Only the CIST
+    # is created automatically, so without this there is no way to reach any
+    # other instance and the VLAN mapping below can never be used.
+    instance_key = f"{instance_id}"
+    created = not db.get_entry('STP_MST_INST', instance_key)
+    if created and instance_id != 0:
+        max_stp_instances = get_max_stp_instances(_db.db)
+        if get_mst_instance_count(db) >= max_stp_instances:
+            ctx.fail(f"The hardware holds {max_stp_instances} spanning tree instances including "
+                     f"the CIST and every one is in use. Delete another MST instance first")
     db.mod_entry('STP_MST_INST', instance_key, {'bridge_priority': str(priority_value)})
+    if created:
+        click.echo(f"MST instance {instance_id} created.")
     click.echo(f"Bridge priority set to {priority_value} for MST instance {instance_id}.")
 
 
@@ -1806,25 +1895,26 @@ def mst_instance_vlan():
 
 
 @mst_instance_vlan.command('add')
-@click.argument('instance_id', metavar='<instance-id>', required=True, type=int)
 @click.argument('vlan_id', metavar='<vlan-id>', required=True, type=int)
 @clicommon.pass_db
-def mst_instance_vlan_add(_db, instance_id, vlan_id):
+def mst_instance_vlan_add(_db, vlan_id):
     """
     Map a VLAN to an MST instance.
     """
     ctx = click.get_current_context()
     db = _db.cfgdb
+    instance_id = ctx.meta['mst_instance_id']
 
-    # Validate instance_id range
-    if not (0 < instance_id < MST_MAX_INSTANCES):
+    # Validate instance_id range. 0 is in range, so that the instance-0
+    # message below is the one an operator actually sees.
+    if not (0 <= instance_id < MST_MAX_INSTANCES):
         ctx.fail(f"Instance ID must be in range 0-{MST_MAX_INSTANCES - 1}")
     # Disallow VLAN configuration for MST instance 0
     if instance_id == 0:
         ctx.fail("VLAN configuration for MST instance 0 is not allowed.")
 
     # Check if instance exists
-    instance_key = f"MST_INSTANCE|{instance_id}"
+    instance_key = f"{instance_id}"
     if not db.get_entry('STP_MST_INST', instance_key):
         ctx.fail(f"MST instance {instance_id} does not exist. Please create it first.")
 
@@ -1839,17 +1929,46 @@ def mst_instance_vlan_add(_db, instance_id, vlan_id):
 
     # Update VLAN list in MST instance
     instance_entry = db.get_entry('STP_MST_INST', instance_key)
-    vlan_list = instance_entry.get('vlan_list', "")
-    vlans = set(vlan_list.split(',')) if vlan_list else set()
+    vlans = get_mst_instance_vlans(instance_entry)
 
     if str(vlan_id) in vlans:
         ctx.fail(f"VLAN {vlan_id} is already mapped to MST instance {instance_id}.")
 
     vlans.add(str(vlan_id))
-    updated_vlan_list = ",".join(sorted(vlans, key=int))
-    db.mod_entry('STP_MST_INST', instance_key, {'vlan_list': updated_vlan_list})
+    set_mst_instance_vlans(db, instance_key, instance_entry, vlans)
 
     click.echo(f"VLAN {vlan_id} added to MST instance {instance_id}.")
+
+
+def get_mst_instance_vlans(instance_entry):
+    """Read an instance's VLAN mapping.
+
+    The YANG model defines it as leaf-list "vlan", which ConfigDBConnector
+    stores as vlan@ and hands back as a list. Rows written before that was
+    honoured carry a comma-joined "vlan_list" string instead; read those too
+    so an existing mapping is not lost.
+    """
+    vlans = instance_entry.get('vlan')
+    if vlans is None:
+        legacy = instance_entry.get('vlan_list', "")
+        vlans = legacy.split(',') if legacy else []
+    return {vlan for vlan in vlans if vlan}
+
+
+def set_mst_instance_vlans(db, instance_key, instance_entry, vlans):
+    """Write an instance's VLAN mapping under the name the YANG model uses.
+
+    set_entry rather than mod_entry because only set_entry removes fields the
+    new row does not carry, which is what retires a legacy vlan_list on the
+    first edit. Every other field of the row is passed through unchanged.
+    """
+    updated = dict(instance_entry)
+    updated.pop('vlan_list', None)
+    if vlans:
+        updated['vlan'] = sorted(vlans, key=int)
+    else:
+        updated.pop('vlan', None)
+    db.set_entry('STP_MST_INST', instance_key, updated)
 
 
 mst.add_command(mst_instance, "instance")
@@ -1857,15 +1976,15 @@ spanning_tree.add_command(mst, "mst")
 
 
 @mst_instance_vlan.command('del')
-@click.argument('instance_id', metavar='<instance-id>', required=True, type=int)
 @click.argument('vlan_id', metavar='<vlan-id>', required=True, type=int)
 @clicommon.pass_db
-def mst_instance_vlan_del(_db, instance_id, vlan_id):
+def mst_instance_vlan_del(_db, vlan_id):
     """
     Remove a VLAN from an MST instance.
     """
     ctx = click.get_current_context()
     db = _db.cfgdb
+    instance_id = ctx.meta['mst_instance_id']
 
     # Validate instance_id range
     if not (0 <= instance_id < MST_MAX_INSTANCES):
@@ -1876,19 +1995,47 @@ def mst_instance_vlan_del(_db, instance_id, vlan_id):
         ctx.fail("VLAN delete from MST instance 0 is not allowed.")
 
     # Check if instance exists
-    instance_key = f"MST_INSTANCE|{instance_id}"
+    instance_key = f"{instance_id}"
     instance_entry = db.get_entry('STP_MST_INST', instance_key)
     if not instance_entry:
         ctx.fail(f"MST instance {instance_id} does not exist.")
 
-    vlan_list = instance_entry.get('vlan_list', "")
-    vlans = set(vlan_list.split(',')) if vlan_list else set()
+    vlans = get_mst_instance_vlans(instance_entry)
 
     if str(vlan_id) not in vlans:
         ctx.fail(f"VLAN {vlan_id} is not mapped to MST instance {instance_id}.")
 
     vlans.remove(str(vlan_id))
-    updated_vlan_list = ",".join(sorted(vlans, key=int))
-    db.mod_entry('STP_MST_INST', instance_key, {'vlan_list': updated_vlan_list})
+    set_mst_instance_vlans(db, instance_key, instance_entry, vlans)
 
     click.echo(f"VLAN {vlan_id} removed from MST instance {instance_id}.")
+
+
+# config spanning_tree mst instance <instance-id> delete
+@mst_instance.command('delete')
+@clicommon.pass_db
+def mst_instance_delete(_db):
+    """
+    Delete an MST instance, its VLAN mapping and its per-port settings.
+    """
+    ctx = click.get_current_context()
+    db = _db.cfgdb
+    instance_id = ctx.meta['mst_instance_id']
+
+    if not (0 <= instance_id < MST_MAX_INSTANCES):
+        ctx.fail(f"Instance ID must be in range 0-{MST_MAX_INSTANCES - 1}")
+    # The CIST always exists; instance 0 is not an instance you can remove.
+    if instance_id == 0:
+        ctx.fail("MST instance 0 (the CIST) cannot be deleted.")
+
+    instance_key = f"{instance_id}"
+    if not db.get_entry('STP_MST_INST', instance_key):
+        ctx.fail(f"MST instance {instance_id} does not exist.")
+
+    # STP_MST_PORT rows reference the instance, so they go first.
+    for key in list(db.get_table('STP_MST_PORT').keys()):
+        if str(key[0]) == instance_key:
+            db.set_entry('STP_MST_PORT', key, None)
+    db.set_entry('STP_MST_INST', instance_key, None)
+
+    click.echo(f"MST instance {instance_id} deleted.")
