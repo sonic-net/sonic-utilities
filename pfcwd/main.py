@@ -509,7 +509,7 @@ class PfcwdCli(object):
 
     def verify_pfc_enable_status_per_port(self, port, pfcwd_info, overwrite=True):
         pfc_status = self.config_db.get_entry(PORT_QOS_MAP, port).get('pfc_enable')
-        if pfc_status is None:
+        if not pfc_status:
             log.log_warning("SKIPPED: PFC is not enabled on port: {}".format(port), also_print_to_console=True)
             return
 
@@ -845,7 +845,7 @@ class PfcwdCli(object):
         port_qos_map = self.config_db.get_table(PORT_QOS_MAP)
         return sum(
             1 for port in ports
-            if port_qos_map.get(port, {}).get('pfc_enable') is not None
+            if port_qos_map.get(port, {}).get('pfc_enable')
         )
 
     @multi_asic_util.run_on_multi_asic
