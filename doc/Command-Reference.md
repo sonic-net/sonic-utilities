@@ -270,6 +270,7 @@
   * [CPO Utilities show commands](#cpo-utilities-show-commands)
   * [CPO Utilities config commands](#cpo-utilities-config-commands)
   * [CPO Utilities EEPROM commands](#cpo-utilities-eeprom-commands)
+  * [CPO Utilities firmware commands](#cpo-utilities-firmware-commands)
 * [Static DNS Commands](#static-dns-commands)
   * [Static DNS config command](#static-dns-config-command)
   * [Static DNS show command](#static-dns-show-command)
@@ -17294,6 +17295,47 @@ These commands display External Laser Source state.
   ELS1                21.973
   ```
 
+**cpoutil show oe|els fwversion**
+
+This command displays the firmware versions of an OE or ELS, or of every OE or ELS when no index is given; like the other `cpoutil show oe` and `cpoutil show els` commands, it does not take `all`. When the device supports CDB firmware management, it shows the image A, image B and factory image versions, the running and committed images, and the active and inactive firmware versions, as `sfputil show fwversion` does, with the image (A or B) that holds each of the active and inactive firmware: the running image holds the active firmware, the other image the inactive firmware. Otherwise it shows only the active and inactive firmware versions read from the EEPROM; a version that the EEPROM does not report is N/A. When the running image is not known, as with the EEPROM versions, the image is not shown in the text output and is N/A in the JSON output (`Active Image`, `Inactive Image`). Targets are processed in turn; a failure on one, including an OE or ELS that is unavailable or that returns no data, does not stop the others, and the command exits non-zero naming the failed targets. While a firmware operation is in progress, a platform that serializes firmware operations reports the targets as busy.
+
+- Usage:
+  ```
+  cpoutil show oe fwversion  [OE_INDEX] [--json]
+  cpoutil show els fwversion [ELS_INDEX] [--json]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo cpoutil show els fwversion 0
+  ELS0:
+    Image A Version: 1.2.0
+    Image B Version: 1.1.0
+    Factory Image Version: 1.0.0
+    Running Image: A
+    Committed Image: A
+    Active Firmware: 1.2.0 (Image A)
+    Inactive Firmware: 1.1.0 (Image B)
+
+  admin@sonic:~$ sudo cpoutil show oe fwversion
+  OE0:
+    Active Firmware: 2.1
+    Inactive Firmware: 2.0
+  OE1:
+    Active Firmware: 2.1
+    Inactive Firmware: 2.1
+
+  admin@sonic:~$ sudo cpoutil show oe fwversion 0 --json
+  {
+      "oe0": {
+          "Active Firmware": "2.1",
+          "Active Image": "N/A",
+          "Inactive Firmware": "2.0",
+          "Inactive Image": "N/A"
+      }
+  }
+  ```
+
 ## CPO Utilities config commands
 
 **cpoutil config interface tx-disable**
@@ -17360,6 +17402,55 @@ Offsets 0-127 address lower memory and are valid only with page 0; nonzero pages
 
   admin@sonic:~$ sudo cpoutil read-eeprom oe -i 0 -b 0 -n 0x11 -o 2 -s 1
   Error: Invalid offset 0x02 for page 11h; valid range: 80h-FFh
+  ```
+
+## CPO Utilities firmware commands
+
+**cpoutil firmware upgrade|download|run|commit**
+
+These commands manage OE and ELS firmware from a raw firmware binary through the platform's OE and ELS endpoints. An OE or ELS is selected by its index; `all` selects every OE or every ELS in the system. `upgrade` downloads the image to the inactive firmware image, runs it and commits it: its progress bar covers the download, and a line follows while it runs and commits the image; `download`, `run` and `commit` perform one step each. Targets are processed in turn; a failure on one, including an OE or ELS that is unavailable, does not stop the others, and the command exits non-zero naming the failed and completed targets. Running new firmware may disrupt traffic on the ports the OE or ELS serves. A platform that does not implement a firmware operation reports it as not implemented. Each operation is logged to syslog with the target and, for `upgrade` and `download`, the image file name and size; an operation interrupted by Ctrl-C, SIGTERM or SIGHUP (for example a lost SSH session) is aborted and logged as aborted (a session started with `nohup` keeps running), with the targets that completed. `cpoutil` does not inspect the image; validating it is left to the OE or ELS during the download. Each step can be verified with `cpoutil show {oe|els} fwversion`.
+
+- Usage:
+  ```
+  cpoutil firmware upgrade  {oe|els} <index>|all --raw <fw.bin>
+  cpoutil firmware download {oe|els} <index>|all --raw <fw.bin>
+  cpoutil firmware run      {oe|els} <index>|all
+  cpoutil firmware commit   {oe|els} <index>|all
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo cpoutil firmware upgrade els 0 --raw els_fw.bin
+  Upgrading ELS0 firmware  [####################################]  100%
+  Upgrading ELS0 firmware: running and committing the new image ...
+  Upgrading ELS0 firmware ... OK (262144 bytes)
+
+  admin@sonic:~$ sudo cpoutil firmware upgrade oe all --raw oe_fw.bin
+  Upgrading OE0 firmware  [####################################]  100%
+  Upgrading OE0 firmware: running and committing the new image ...
+  Upgrading OE0 firmware ... OK (524288 bytes)
+  Upgrading OE1 firmware  [####################################]  100%
+  Upgrading OE1 firmware: running and committing the new image ...
+  Upgrading OE1 firmware ... OK (524288 bytes)
+
+  admin@sonic:~$ sudo cpoutil firmware download els all --raw els_fw.bin
+  Downloading ELS0 firmware  [####################################]  100%
+  Downloading ELS0 firmware ... OK (262144 bytes)
+  Downloading ELS1 firmware  [####################################]  100%
+  Downloading ELS1 firmware ... OK (262144 bytes)
+
+  admin@sonic:~$ sudo cpoutil firmware run els all
+  Running ELS0 firmware ... OK
+  Running ELS1 firmware ... OK
+
+  admin@sonic:~$ sudo cpoutil firmware commit els all
+  Committing ELS0 firmware ... OK
+  Committing ELS1 firmware ... OK
+
+  admin@sonic:~$ sudo cpoutil firmware run els 0
+  Running ELS0 firmware ... Failed
+  Error: Running ELS0 firmware failed: CDB status 0x45
+  Error: ELS firmware run failed for ELS0
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#cpo-utilities-commands)
