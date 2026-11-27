@@ -103,8 +103,8 @@ def test_undeclared_page_is_rejected_before_io(endpoints, operation, interface, 
 
 
 @pytest.mark.parametrize('operation', ['read-eeprom', 'write-eeprom'])
-@pytest.mark.parametrize('lower,offset,size', [(False, 0, 1), (False, 127, 2), (True, 128, 1), (True, 127, 2)])
-def test_page_half_is_enforced(endpoints, operation, lower, offset, size):
+@pytest.mark.parametrize('lower,offset', [(False, 0), (True, 128)])
+def test_page_half_is_enforced(endpoints, operation, lower, offset):
     from sonic_platform_base.sonic_xcvr.codes.public.cmis import CmisCodes
     from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis import CmisFlatMemMap
 
@@ -112,16 +112,27 @@ def test_page_half_is_enforced(endpoints, operation, lower, offset, size):
     mem_map = CmisFlatMemMap(CmisCodes)
     mem_map.pages = [mem_map.pages[0 if lower else 1]]
     cpo.oe.get_api().xcvr_eeprom.mem_map = mem_map
-    result = invoke_coverage(command(operation, 'oe', False, 0, offset, size))
+    result = invoke_coverage(command(operation, 'oe', False, 0, offset))
     assert result.exit_code == 1, result.output
     assert 'does not cover offsets' in result.output
     assert cpo.reads == [] and cpo.writes == []
 
 
 @pytest.mark.parametrize('operation', ['read-eeprom', 'write-eeprom'])
-def test_page_zero_can_span_both_declared_halves(endpoints, operation):
+@pytest.mark.parametrize('interface', [False, True])
+def test_page_zero_cannot_span_both_declared_halves(endpoints, operation, interface):
     cpo, _ = endpoints
-    result = invoke_coverage(command(operation, 'oe', False, 0, 120, 16))
+    result = invoke_coverage(command(operation, 'oe', interface, 0, 127, 2))
+    assert result.exit_code == 1, result.output
+    assert 'crosses the lower/upper memory boundary' in result.output
+    assert cpo.reads == [] and cpo.writes == []
+
+
+@pytest.mark.parametrize('operation', ['read-eeprom', 'write-eeprom'])
+@pytest.mark.parametrize('offset,size', [(126, 2), (128, 2)])
+def test_page_zero_allows_ranges_on_either_side_of_boundary(endpoints, operation, offset, size):
+    cpo, _ = endpoints
+    result = invoke_coverage(command(operation, 'oe', False, 0, offset, size))
     assert result.exit_code == 0, result.output
     assert len(cpo.reads if operation == 'read-eeprom' else cpo.writes) == 1
 

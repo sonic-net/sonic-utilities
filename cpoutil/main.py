@@ -1766,6 +1766,8 @@ def _validate_eeprom_range(bank, page, offset, size):
         raise CpoCommandError(
             "EEPROM range crosses the CMIS page boundary"
         )
+    if offset < EEPROM_PAGE_OFFSET < offset + size:
+        raise CpoCommandError("EEPROM range crosses the lower/upper memory boundary")
 
 
 def _eeprom_page_start(page):
@@ -1803,6 +1805,8 @@ def _validate_eeprom_page(resource_type, resource_id, cpo, page, offset, size):
 
 def _validate_requested_eeprom_bank(bank, page):
     """Reject explicit nonzero banks on pages the CMIS reader treats as shared."""
+    # TODO: Allow nonzero CDB banks once CmisPage.linear_offset() supports
+    # banked CDB addressing in sonic-platform-common.
     if bank != 0 and (page < 0x10 or 0x9F <= page <= 0xAF):
         raise CpoCommandError(
             "Page {:x}h does not use bank selection; --bank must be 0".format(page)
@@ -1934,6 +1938,8 @@ def _interface_eeprom_target(port, target, page=None):
     mapping = cpo_mapping.resolve_interface(port, current_port_config)
     if target == OPTICAL_ENGINE:
         bank = _local_oe_bank(mapping)
+        # TODO: Preserve the mapped CDB bank once CmisPage.linear_offset()
+        # supports banked CDB addressing in sonic-platform-common.
         if page is not None and (page < 0x10 or 0x9F <= page <= 0xAF):
             bank = 0
         return mapping.oe_id, bank
