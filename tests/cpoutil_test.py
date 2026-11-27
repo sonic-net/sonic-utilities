@@ -1693,8 +1693,13 @@ class TestGangedPorts:
     def ganged(self, coverage_environment, monkeypatch):
         # Ethernet0 is ganged across physical ports 1 and 2.
         monkeypatch.setattr(cpoutil, "current_port_config", {"Ethernet0": {"index": (1, 2), "lanes": (1, 2)}})
-        cpoutil.cpo_object_map[PORT][2] = coverage_environment
-        return coverage_environment
+        second = CoverageFakeCpo()
+        coverage_environment.api.get_transceiver_dom_real_value = lambda: {"temperature": 10.0}
+        coverage_environment.api.get_elsfp_dom_real_value = lambda: {"temperature": 30.0}
+        second.api.get_transceiver_dom_real_value = lambda: {"temperature": 20.0}
+        second.api.get_elsfp_dom_real_value = lambda: {"temperature": 40.0}
+        cpoutil.cpo_object_map[PORT][2] = second
+        return coverage_environment, second
 
     @pytest.mark.parametrize("command", ["tx-disable", "speed", "lane-status"])
     def test_all_port_commands_use_the_logical_port(self, ganged, command):
@@ -1705,6 +1710,15 @@ class TestGangedPorts:
         assert result.exit_code == 0, result.output
         assert set(json.loads(result.output)) == {"Ethernet0:1 (ganged)", "Ethernet0:2 (ganged)"}
 
+    def test_dom_uses_each_physical_member(self, ganged):
+        result = invoke_coverage(["show", "interface", "dom", "--json"])
+        assert result.exit_code == 0, result.output
+        values = json.loads(result.output)
+        first = values["Ethernet0:1 (ganged)"]
+        second = values["Ethernet0:2 (ganged)"]
+        assert (first["oe"]["dom"]["temperature"], second["oe"]["dom"]["temperature"]) == (10.0, 20.0)
+        assert (first["els"]["dom"]["temperature"], second["els"]["dom"]["temperature"]) == (30.0, 40.0)
+
     def test_entries_keep_the_logical_port(self, ganged):
         entries = cpoutil.get_port_cpo_entries()
         assert [(name, physical, logical) for name, physical, _, logical in entries] == [
@@ -1712,6 +1726,32 @@ class TestGangedPorts:
             ("Ethernet0:2 (ganged)", 2, "Ethernet0"),
         ]
         assert [entry[:3] for entry in entries] == cpoutil.get_port_cpo_objects()
+
+    def test_dom_reads_unresolved_port_separately(
+            self, coverage_environment, monkeypatch):
+        monkeypatch.setattr(cpoutil, "current_port_config", {
+            "Ethernet0": {"index": (1,), "lanes": (1,)},
+            "Ethernet1": {"index": (1,), "lanes": (2,)},
+        })
+        resolve = cpoutil.cpo_mapping.resolve_interface
+
+        def fail_ethernet1(logical_port, port_config):
+            if logical_port == "Ethernet1":
+                raise CpoMappingError("Unable to resolve Ethernet1")
+            return resolve(logical_port, port_config)
+
+        monkeypatch.setattr(cpoutil.cpo_mapping, "resolve_interface", fail_ethernet1)
+        coverage_environment.api.get_transceiver_dom_real_value = mock.Mock(
+            side_effect=[{"temperature": 10.0}, {"temperature": 20.0}])
+        coverage_environment.api.get_elsfp_dom_real_value = mock.Mock(
+            side_effect=[{"temperature": 30.0}, {"temperature": 40.0}])
+
+        result = invoke_coverage(["show", "interface", "dom", "--json"])
+        assert result.exit_code == 0, result.output
+        records = json.loads(result.output)
+        ports = ("Ethernet0", "Ethernet1")
+        assert tuple(records[p]["oe"]["dom"]["temperature"] for p in ports) == (10.0, 20.0)
+        assert tuple(records[p]["els"]["dom"]["temperature"] for p in ports) == (30.0, 40.0)
 
 
 class TestInterfaceElsEepromBank:
