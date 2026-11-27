@@ -14,7 +14,6 @@ from sonic_py_common import multi_asic
 from sonic_py_common.logger import Logger
 from sonic_platform_base.sonic_xcvr.cpo.cpo_base import CpoBase
 from sonic_platform_base.sonic_xcvr.mem_maps.public.cmis.pages.consts import CMIS_LANES_PER_BANK
-from sonic_platform_base.sonic_xcvr.optoe_eeprom_rw import OptoeEepromReadWriteMixin
 from sonic_platform_base.sonic_xcvr.xcvr_eeprom import XcvrEeprom
 from utilities_common import platform_sfputil_helper
 from utilities_common.platform_sfputil_helper import (
@@ -658,36 +657,40 @@ def _append_additional_dom_values(lines, values, displayed_keys, format_map):
 
 @contextmanager
 def _eeprom_read_snapshot():
-    """Reuse successful Optoe bytes for one read-only command invocation.
+    """Reuse successful EEPROM reads during one read-only command.
 
-    Absolute offsets already encode bank/page selection. Cache only the
-    unmodified community Optoe reader: custom platform readers may translate
-    offsets themselves and must retain their existing behavior.
+    A bound reader must use linear offsets in the address space identified by
+    its endpoint's EEPROM path. Reads served by the snapshot reuse the first
+    successful bytes without accessing hardware again.
     """
     images = {}
     readers = {}
 
     def attach(endpoint, api=None):
-        if api is None:
-            if (not isinstance(endpoint, OptoeEepromReadWriteMixin)
-                    or getattr(endpoint.read_eeprom, "__func__", None)
-                    is not OptoeEepromReadWriteMixin.read_eeprom):
+        try:
+            get_path = endpoint.get_eeprom_path
+            if not callable(get_path):
                 return
+            path = get_path()
+        except (AttributeError, NotImplementedError, OSError):
+            return
+        if not isinstance(path, str) or not path:
+            return
+
+        if api is None:
             try:
                 api = endpoint.get_api()
             except Exception:
                 # A working platform hook must not depend on optional caching.
                 return
-        eeprom = getattr(api, "xcvr_eeprom", None)
-        if not isinstance(eeprom, XcvrEeprom) or id(eeprom) in readers:
-            return
-        reader = eeprom.reader
-        if (not isinstance(endpoint, OptoeEepromReadWriteMixin)
-                or getattr(reader, "__self__", None) is not endpoint
-                or getattr(reader, "__func__", None) is not OptoeEepromReadWriteMixin.read_eeprom):
-            return
-        path = endpoint.get_eeprom_path()
-        if not isinstance(path, str) or not path:
+        try:
+            eeprom = api.xcvr_eeprom
+            if not isinstance(eeprom, XcvrEeprom) or id(eeprom) in readers:
+                return
+            reader = eeprom.reader
+            if reader.__self__ is not endpoint:
+                return
+        except AttributeError:
             return
         image = images.setdefault(path, {})
 

@@ -23,6 +23,7 @@ from cpoutil.mapping import (  # noqa: E402
 )
 from sonic_platform_base.sonic_xcvr.api.public.elsfp import ElsfpApi  # noqa: E402
 from sonic_platform_base.sonic_xcvr.fields import consts, elsfp_consts  # noqa: E402
+from sonic_platform_base.sonic_xcvr.optoe_eeprom_rw import OptoeEepromReadWriteMixin  # noqa: E402
 
 
 @pytest.fixture
@@ -970,7 +971,7 @@ class TestDirectPlatformApiCommands(object):
         assert "Invalid oe index '99'" in result.output
 
 
-class DomOptoeEndpoint(cpoutil.OptoeEepromReadWriteMixin):
+class DomOptoeEndpoint(OptoeEepromReadWriteMixin):
     def get_presence(self):
         return True
 
@@ -1095,6 +1096,58 @@ class TestDomEepromSnapshot:
             assert read.reader(0, 4) == bytearray(b"AB")
             path.write_bytes(b"WXYZ")
             assert read.reader(0, 4) == bytearray(b"WXYZ")
+
+    @pytest.mark.parametrize("base", [object, OptoeEepromReadWriteMixin])
+    def test_snapshot_accepts_compatible_linear_readers(self, base, tmp_path):
+        path = tmp_path / "eeprom"
+        path.write_bytes(b"ABCD")
+
+        class Endpoint(base):
+            write_eeprom = None
+
+            def __init__(self):
+                self.reads = []
+                self.api = DomSnapshotApi(self)
+
+            def get_api(self):
+                return self.api
+
+            def get_eeprom_path(self):
+                return str(path)
+
+            def read_eeprom(self, offset, size):
+                self.reads.append((offset, size))
+                with path.open("rb") as eeprom:
+                    eeprom.seek(offset)
+                    return bytearray(eeprom.read(size))
+
+        first, second = Endpoint(), Endpoint()
+        first_eeprom = first.api.xcvr_eeprom
+        second_eeprom = second.api.xcvr_eeprom
+        original_first, original_second = first_eeprom.reader, second_eeprom.reader
+        with cpoutil._eeprom_read_snapshot() as attach:
+            attach(second, first.api)
+            assert first_eeprom.reader is original_first
+            attach(first)
+            attach(second, second.api)
+            assert first_eeprom.reader(0, 2) == bytearray(b"AB")
+            assert second_eeprom.reader(1, 1) == bytearray(b"B")
+            assert first.reads == [(0, 2)]
+            assert not second.reads
+        assert first_eeprom.reader is original_first
+        assert second_eeprom.reader is original_second
+
+    @pytest.mark.parametrize("path_error", [None, AttributeError, NotImplementedError, OSError])
+    def test_snapshot_skips_unavailable_eeprom_path(self, tmp_path, monkeypatch, path_error):
+        endpoint = self.endpoint(tmp_path / "unused")
+        eeprom = endpoint.api.xcvr_eeprom
+        original = eeprom.reader
+        get_path = mock.Mock(side_effect=path_error) if path_error else None
+        monkeypatch.setattr(endpoint, "get_eeprom_path", get_path)
+
+        with cpoutil._eeprom_read_snapshot() as attach:
+            attach(endpoint, endpoint.api)
+            assert eeprom.reader is original
 
     def test_snapshot_expires_and_reader_restores_after_error(self, tmp_path):
         path = tmp_path / "eeprom"
