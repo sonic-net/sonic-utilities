@@ -433,6 +433,37 @@ def get_interface_ipaddresses(config_db, interface_name):
 
     return ipaddresses
 
+
+VLAN_DHCP_SERVER_FIELDS = {
+    4: (('VLAN', 'dhcp_servers'), ('DHCPV4_RELAY', 'dhcpv4_servers')),
+    6: (('VLAN', 'dhcpv6_servers'), ('DHCP_RELAY', 'dhcpv6_servers')),
+}
+
+
+def check_vlan_dhcp_servers_keep_ip(ctx, config_db, interface_name, ips_to_remove):
+    """Fail if removing the IPs leaves a VLAN's DHCP servers without an IP of their address family"""
+    if not interface_name.startswith('Vlan'):
+        return
+    current = get_interface_ipaddresses(config_db, interface_name)
+    removing = current & set(ips_to_remove)
+    remaining = current - removing
+    for version, fields in VLAN_DHCP_SERVER_FIELDS.items():
+        if not any(ip.version == version for ip in removing) or any(ip.version == version for ip in remaining):
+            continue
+        for table, field in fields:
+            if config_db.get_entry(table, interface_name).get(field):
+                ctx.fail("Cannot remove the last IPv{} address of interface {}. DHCP servers are still configured"
+                         " in {}|{} {}.".format(version, interface_name, table, interface_name, field))
+
+
+def check_bound_vlans_keep_dhcp_ips(ctx, config_db, bind_field, bind_name):
+    """Run check_vlan_dhcp_servers_keep_ip for all IPs of the VLANs bound to a VRF or VNET"""
+    for interface_name, entry in config_db.get_table('VLAN_INTERFACE').items():
+        if not isinstance(interface_name, tuple) and entry.get(bind_field) == bind_name:
+            check_vlan_dhcp_servers_keep_ip(ctx, config_db, interface_name,
+                                            get_interface_ipaddresses(config_db, interface_name))
+
+
 def is_vrf_exists(config_db, vrf_name):
     """Check if VRF exists
     """
@@ -6765,6 +6796,7 @@ def remove(ctx, interface_name, ip_addr):
     table_name = get_interface_table_name(interface_name)
     if table_name == "":
         ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
+    check_vlan_dhcp_servers_keep_ip(ctx, config_db, interface_name, [ip_address])
     interface_addresses = get_interface_ipaddresses(config_db, interface_name)
     # If we deleting the last IP entry of the interface, check whether a static route present for the RIF
     # before deleting the entry and also the RIF.
@@ -7539,6 +7571,7 @@ def bind(ctx, interface_name, vrf_name):
 
     # Clean ip addresses if interface configured
     interface_addresses = get_interface_ipaddresses(config_db, interface_name)
+    check_vlan_dhcp_servers_keep_ip(ctx, config_db, interface_name, interface_addresses)
     for ip_address in interface_addresses:
         remove_router_interface_ip_address(config_db, interface_name, ip_address)
     if table_name == "VLAN_SUB_INTERFACE":
@@ -7599,6 +7632,8 @@ def unbind(ctx, interface_name):
 
     if is_interface_bind_to_vrf(config_db, interface_name) is False:
         return
+    check_vlan_dhcp_servers_keep_ip(ctx, config_db, interface_name,
+                                    get_interface_ipaddresses(config_db, interface_name))
     if table_name == "VLAN_SUB_INTERFACE":
         subintf_entry = config_db.get_entry(table_name, interface_name)
         if 'vrf_name' in subintf_entry:
@@ -8680,6 +8715,7 @@ def del_vrf(ctx, vrf_name):
     elif is_mgmt:
         vrf_delete_management_vrf(config_db)
     else:
+        check_bound_vlans_keep_dhcp_ips(ctx, config_db, 'vrf_name', vrf_name)
         del_interface_bind_to_vrf(config_db, vrf_name)
         try:
             config_db.set_entry('VRF', vrf_name, None)
@@ -11308,6 +11344,7 @@ def del_vnet(db, vnet_name):
     if not is_vnet_exists(config_db, vnet_name):
         ctx.fail("VNET {} does not exist!".format(vnet_name))
     else:
+        check_bound_vlans_keep_dhcp_ips(ctx, config_db, 'vnet_name', vnet_name)
         del_interface_bind_to_vnet(config_db, vnet_name)
         del_route_bind_to_vnet(config_db, vnet_name)
 

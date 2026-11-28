@@ -478,6 +478,52 @@ class TestConfigIP(object):
             assert mock_run_command.call_count == 1
             assert ('Ethernet68', '3000::1/64') not in db.cfgdb.get_table('INTERFACE')
 
+    def test_remove_last_vlan_ip_with_dhcp_servers(self):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+        remove = config.config.commands["interface"].commands["ip"].commands["remove"]
+
+        # Vlan1000 has DHCPv4 servers in VLAN and DHCPv6 servers in DHCP_RELAY
+        for ip, version in (("192.168.0.1/21", 4), ("fc02:1000::1/64", 6)):
+            with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+                result = runner.invoke(remove, ["Vlan1000", ip], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code != 0
+            assert "Cannot remove the last IPv{} address of interface Vlan1000".format(version) in result.output
+            assert mock_run_command.call_count == 0
+            assert ('Vlan1000', ip) in db.cfgdb.get_table('VLAN_INTERFACE')
+
+        # Another IPv4 address keeps the DHCPv4 servers valid
+        db.cfgdb.set_entry('VLAN_INTERFACE', ('Vlan1000', '10.0.0.1/24'), {"NULL": "NULL"})
+        with mock.patch('utilities_common.cli.run_command'):
+            result = runner.invoke(remove, ["Vlan1000", "192.168.0.1/21"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('Vlan1000', '192.168.0.1/21') not in db.cfgdb.get_table('VLAN_INTERFACE')
+
+    def test_vrf_bind_unbind_del_vlan_with_dhcp_servers(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb, 'namespace': db.db.namespace}
+        error = "Cannot remove the last IPv4 address of interface Vlan1000"
+
+        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"],
+                               ["Vlan1000", "Vrf1"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code != 0
+        assert error in result.output
+        assert 'vrf_name' not in db.cfgdb.get_entry('VLAN_INTERFACE', 'Vlan1000')
+
+        db.cfgdb.mod_entry('VLAN_INTERFACE', 'Vlan1000', {'vrf_name': 'Vrf1'})
+        for command, args in ((config.config.commands["interface"].commands["vrf"].commands["unbind"], ["Vlan1000"]),
+                              (config.config.commands["vrf"].commands["del"], ["Vrf1"])):
+            result = runner.invoke(command, args, obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code != 0
+            assert error in result.output
+            assert ('Vlan1000', '192.168.0.1/21') in db.cfgdb.get_table('VLAN_INTERFACE')
+
     def test_intf_vrf_bind_unbind(self):
         runner = CliRunner()
         db = Db()

@@ -902,6 +902,14 @@ class TestVlan(object):
         assert result.exit_code != 0
         assert "Error: vlan: 1027 can not be removed. First remove vxlan mapping" in result.output
 
+    @staticmethod
+    def remove_vlan_dhcp_servers(db, vlan_name):
+        # A VLAN's DHCP servers must be removed before its last IP addresses
+        vlan = db.cfgdb.get_entry('VLAN', vlan_name)
+        vlan.pop('dhcp_servers', None)
+        db.cfgdb.set_entry('VLAN', vlan_name, vlan)
+        db.cfgdb.set_entry('DHCP_RELAY', vlan_name, None)
+
     def test_config_vlan_del_vlan(self, mock_restart_dhcp_relay_service):
         runner = CliRunner()
         db = Db()
@@ -915,6 +923,7 @@ class TestVlan(object):
         assert "Error: Vlan1000 can not be removed. First remove IP addresses assigned to this VLAN\n" in result.output
 
         # remove vlan IP`s
+        self.remove_vlan_dhcp_servers(db, "Vlan1000")
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
                                    ["Vlan1000", "192.168.0.1/21"], obj=obj)
@@ -1731,6 +1740,7 @@ class TestVlan(object):
         obj = {"config_db": db.cfgdb}
 
         # remove vlan IP`s
+        self.remove_vlan_dhcp_servers(db, "Vlan1000")
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
                                    ["Vlan1000", "192.168.0.1/21"], obj=obj)
