@@ -1,0 +1,16 @@
+{
+    "VERSIONS|DATABASE": {
+        "VERSION": "version_202605_01"
+    },
+    "LOGGER|xcvrd": {
+        "LOGLEVEL": "NOTICE",
+        "require_manual_refresh": "true"
+    },
+    "LOGGER|orchagent": {
+        "LOGLEVEL": "INFO",
+        "LOGOUTPUT": "SYSLOG"
+    },
+    "LOGGER|only_refresh": {
+        "require_manual_refresh": "true"
+    }
+}

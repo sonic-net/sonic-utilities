@@ -823,6 +823,25 @@ class DBMigrator():
             flex_counter.pop('FLEX_COUNTER_DELAY_STATUS', None)
             self.configDB.set_entry('FLEX_COUNTER_TABLE', obj, flex_counter)
 
+    def migrate_logger_require_manual_refresh(self):
+        """
+        Drop require_manual_refresh from LOGGER rows; it is process state, not
+        operator intent. A row left with no fields is removed.
+        """
+        try:
+            table = self.configDB.get_table('LOGGER')
+        except Exception as e:
+            log.log_error(f"Failed to read LOGGER table: {str(e)}")
+            return
+        for key, entry in table.items():
+            if 'require_manual_refresh' not in entry:
+                continue
+            fields = {f: v for f, v in entry.items() if f != 'require_manual_refresh'}
+            try:
+                self.configDB.set_entry('LOGGER', key, fields or None)
+                log.log_info(f"Dropped require_manual_refresh from LOGGER|{key}")
+            except Exception as e:
+                log.log_error(f"Failed to drop require_manual_refresh from LOGGER|{key}: {str(e)}")
 
     def migrate_sflow_table(self):
         """
@@ -1435,8 +1454,12 @@ class DBMigrator():
     def version_202605_01(self):
         """
         Version 202605_01
+
+        Terminal handler, so this runs on every boot and
+        migrate_logger_require_manual_refresh has to stay idempotent.
         """
         log.log_info('Handling version_202605_01')
+        self.migrate_logger_require_manual_refresh()
         return None
 
     def get_version(self):

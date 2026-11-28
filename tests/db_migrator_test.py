@@ -1172,3 +1172,73 @@ class TestIPinIPTunnelEcnModeMigrator(object):
         expected_state_db = SonicV2Connector(host='127.0.0.1')
         expected_state_db.connect(expected_state_db.STATE_DB)
         self.compare_keys(expected_state_db, dbmgtr.stateDB, 'STATE_DB')
+
+
+class TestLoggerRequireManualRefreshMigrator(object):
+    """
+    require_manual_refresh is process state and is dropped from LOGGER rows.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        dbconnector.dedicated_dbs['CONFIG_DB'] = None
+
+    def migrator(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(
+            mock_db_path, 'config_db', 'logger_require_manual_refresh_input')
+        import db_migrator
+        with mock.patch.object(device_info, 'get_sonic_version_info', return_value={'asic_type': 'vs'}):
+            return db_migrator.DBMigrator(None)
+
+    def test_field_is_dropped_and_other_fields_are_kept(self):
+        dbmgtr = self.migrator()
+        dbmgtr.migrate_logger_require_manual_refresh()
+
+        logger = dbmgtr.configDB.get_table('LOGGER')
+        assert logger['xcvrd'] == {'LOGLEVEL': 'NOTICE'}
+        assert logger['orchagent'] == {'LOGLEVEL': 'INFO', 'LOGOUTPUT': 'SYSLOG'}
+        assert 'only_refresh' not in logger
+
+    def test_running_again_changes_nothing(self):
+        dbmgtr = self.migrator()
+        dbmgtr.migrate_logger_require_manual_refresh()
+        with mock.patch.object(dbmgtr.configDB, 'set_entry') as mock_set:
+            dbmgtr.migrate_logger_require_manual_refresh()
+        mock_set.assert_not_called()
+
+    def test_read_failure_is_logged_and_does_not_raise(self):
+        dbmgtr = self.migrator()
+        with mock.patch.object(dbmgtr.configDB, 'get_table', side_effect=RuntimeError('boom')), \
+                mock.patch.object(dbmgtr.configDB, 'set_entry') as mock_set, \
+                mock.patch('db_migrator.log') as mock_log:
+            dbmgtr.migrate_logger_require_manual_refresh()
+        mock_set.assert_not_called()
+        mock_log.log_error.assert_called_once()
+
+    def test_row_write_failure_does_not_stop_other_rows(self):
+        dbmgtr = self.migrator()
+        real_set = dbmgtr.configDB.set_entry
+
+        def set_entry(table, key, value):
+            if key == 'xcvrd':
+                raise RuntimeError('boom')
+            return real_set(table, key, value)
+
+        with mock.patch.object(dbmgtr.configDB, 'set_entry', side_effect=set_entry), \
+                mock.patch('db_migrator.log') as mock_log:
+            dbmgtr.migrate_logger_require_manual_refresh()
+        mock_log.log_error.assert_called_once()
+        logger = dbmgtr.configDB.get_table('LOGGER')
+        assert logger['xcvrd'] == {'LOGLEVEL': 'NOTICE', 'require_manual_refresh': 'true'}
+        assert 'only_refresh' not in logger
+
+    def test_wired_into_version_202605_01(self):
+        dbmgtr = self.migrator()
+        with mock.patch.object(dbmgtr, 'migrate_logger_require_manual_refresh') as migrate:
+            assert dbmgtr.version_202605_01() is None
+        migrate.assert_called_once_with()
