@@ -1823,6 +1823,28 @@ def delete_transceiver_tables():
         state_db.delete_all_by_pattern(state_db.STATE_DB, table + state_db_del_pattern)
 
 
+def clear_logger_state():
+    """Delete LOGGER_TABLE|* from STATE_DB in the host and every ASIC namespace.
+
+    Called by reload and load_minigraph once services are stopped, so the
+    table is empty when they restart. A failure in one namespace is logged and
+    the others are still cleared; nothing is raised.
+    """
+    namespaces = [DEFAULT_NAMESPACE]
+    try:
+        if multi_asic.is_multi_asic():
+            namespaces += multi_asic.get_namespace_list()
+    except Exception as e:
+        log.log_warning("Failed to list namespaces, clearing LOGGER_TABLE in the host only: {}".format(e))
+    for namespace in namespaces:
+        try:
+            state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+            state_db.connect(state_db.STATE_DB, False)
+            state_db.delete_all_by_pattern(state_db.STATE_DB, "LOGGER_TABLE|*")
+        except Exception as e:
+            log.log_warning("Failed to clear LOGGER_TABLE in namespace '{}': {}".format(namespace, e))
+
+
 def delete_bgp_peer_table():
     # Delete all entries in BGP_PEER_CONFIGURED_TABLE in state db.
     state_db = SonicV2Connector(use_unix_socket_path=True)
@@ -2462,6 +2484,7 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
     if not no_service_restart:
         log.log_notice("'reload' stopping services...")
         _stop_services()
+        clear_logger_state()
 
     if multiasic_single_file_mode:
         multiasic_write_to_db(cfg_files[0], load_sysinfo)
@@ -2666,6 +2689,7 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
         delete_transceiver_tables()
         delete_bgp_peer_table()
         _stop_services()
+        clear_logger_state()
 
     # For Single Asic platform the namespace list has the empty string
     # for mulit Asic platform the empty string to generate the config
