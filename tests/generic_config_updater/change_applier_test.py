@@ -244,6 +244,9 @@ class TestChangeApplier(unittest.TestCase):
         generic_config_updater.change_applier.UPDATER_CONF_FILE = CONF_FILE
         generic_config_updater.change_applier.set_verbose(True)
         generic_config_updater.services_validator.set_verbose(True)
+        # Verbose is module state: leave it off for the tests that run after this one on the same worker.
+        self.addCleanup(generic_config_updater.change_applier.set_verbose, False)
+        self.addCleanup(generic_config_updater.services_validator.set_verbose, False)
 
         applier = generic_config_updater.change_applier.ChangeApplier()
         debug_print("invoked applier")
