@@ -40,6 +40,9 @@
   * [BMC chassis module commands](#bmc-chassis-module-commands)
 * [BFD](#bfd)
   * [BFD show commands](#bfd-show-commands)
+* [IS-IS](#is-is)
+  * [IS-IS show commands](#is-is-show-commands)
+  * [IS-IS config commands](#is-is-config-commands)
 * [BGP](#bgp)
   * [BGP show commands](#bgp-show-commands)
   * [BGP config commands](#bgp-config-commands)
@@ -2819,6 +2822,110 @@ This command displays the state and key parameters of all BFD sessions that matc
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#bfd)
+
+## IS-IS
+
+IS-IS requires `DEVICE_METADATA|localhost` field
+`frr_mgmt_framework_config="true"` and a restart of the affected bgp container.
+The baseline is FRR 10.7.1 (`10.7.1-sonic-0`). Add a named instance before
+configuring its attributes or binding interfaces. Non-default VRFs must exist;
+interfaces bind to a single same-VRF instance in their actual VRF. Aliases are
+accepted in alias naming mode. PortChannel member ports are rejected.
+All three groups accept group-level `--namespace NAMESPACE`.
+
+### IS-IS show commands
+
+```
+show isis configuration [--vrf VRF] [--instance INSTANCE]
+show isis summary [--vrf VRF|all] [--json]
+show isis interface [IFNAME|--detail] [--vrf VRF|all] [--json]
+show isis neighbor [SYSTEM-ID|--detail] [--vrf VRF|all] [--json]
+show isis database [LSP-ID] [--detail] [--vrf VRF|all] [--json]
+show isis route [--level level-1|level-2] [--prefix-sid] [--backup] [--algorithm 128-255|all] [--vrf VRF|all] [--json]
+show isis topology [--level level-1|level-2] [--algorithm 128-255|all] [--vrf VRF|all] [--json]
+show isis hostname [--vrf VRF|all]
+show isis spf-delay-ietf [--vrf VRF|all]
+show isis flex-algo [128-255] [--vrf VRF|all]
+show isis fast-reroute summary [--level level-1|level-2] [--vrf VRF|all]
+show isis segment-routing node [--algorithm 128-255|all]
+show isis mpls-te router [--vrf VRF|all]
+show isis mpls-te interface [IFNAME]
+show isis mpls-te database [vertex [ID]|edge [IP]|subnet [PREFIX]] [--detail|--json] [--vrf VRF|all]
+show isis mpls ldp-sync [interface IFNAME|all]
+```
+
+### IS-IS config commands
+
+```
+config isis add INSTANCE
+config isis del INSTANCE
+config isis net INSTANCE NET
+config isis net del INSTANCE NET
+config isis level INSTANCE {level-1|level-2|level-1-2}
+config isis {dynamic-hostname|ipv6-multi-topology|overload} INSTANCE {enable|disable}
+config isis lsp-mtu INSTANCE BYTES
+config isis overload-on-startup INSTANCE SECONDS
+config isis {lsp-refresh-interval|max-lsp-lifetime|lsp-gen-interval|spf-interval} INSTANCE SECONDS [--level level-1|level-2|both]
+config isis spf-backoff INSTANCE --init-delay MS --short-delay MS --long-delay MS --hold-down MS --time-to-learn MS
+config isis spf-backoff del INSTANCE
+config isis reset INSTANCE {level|dynamic-hostname|lsp-mtu|ipv6-multi-topology|overload|overload-on-startup}
+config isis reset INSTANCE {lsp-refresh-interval|max-lsp-lifetime|lsp-gen-interval|spf-interval} [--level level-1|level-2|both]
+config interface isis {ipv4|ipv6} IFNAME enable --instance INSTANCE
+config interface isis {ipv4|ipv6} IFNAME disable
+config interface isis del IFNAME
+config interface isis passive IFNAME {enable|disable}
+config interface isis level IFNAME {level-1|level-2|level-1-2}
+config interface isis network-type IFNAME {lan|p2p}
+config interface isis {metric|hello-interval|hello-multiplier} IFNAME VALUE [--level level-1|level-2|both]
+config interface isis reset IFNAME {level|network-type|passive}
+config interface isis reset IFNAME {metric|hello-interval|hello-multiplier} [--level level-1|level-2|both]
+config isis redistribute add INSTANCE AF SOURCE {level-1|level-2} [--table-id 1-65535] [--metric VALUE] [--route-map NAME]
+config isis redistribute del INSTANCE AF SOURCE {level-1|level-2} [--table-id 1-65535]
+```
+
+Configuration commands accept `--vrf VRF`, default `default` (omitted above).
+Per-level commands default to both; levels are saved independently. Runtime
+interface level is the intersection with parent level; empty intersection is
+rejected. Instance row existence creates the instance; repeat add preserves it.
+Parent del requires interface cleanup and removes its redistribution rows.
+NETs in one VRF share a system ID; NET del must match the saved value.
+Instance deletion, NET deletion and replacement use the corresponding FRR
+commands. FRR owns the shared system-ID runtime state.
+
+LSP MTU is 128–4352 bytes (default 1497), refresh 1–65235 seconds (900),
+lifetime 350–65535 seconds (1200), generation 1–120 seconds (30) and minimum
+SPF interval 1–120 seconds (1). Each level requires lifetime >= refresh + 300
+and generation < refresh. Backoff requires all five 0–60000 ms values with
+hold-down > time-to-learn. Startup overload is 0–86400 seconds (0).
+Dynamic hostname defaults on; IPv6 multi-topology and overload default off.
+
+AFs default off; enabling one creates the interface row. Disabling the final AF
+deletes all interface parameters; re-enable uses defaults. AF has no reset.
+Reset clears selected explicit fields while preserving siblings and the row.
+Metric is 0–16777215 (10), Hello interval 1–600 seconds (3), multiplier 2–100
+(10), network type LAN and passive off. P2P uses L1 Hello and retains L2 values.
+IPv6 multi-topology is independent of interface IPv6 enable.
+
+Redistribution AF is ipv4/ipv6. Table sources require table-id; ordinary sources
+reject it and save key ID 0. Metric defaults to 0. Add fully replaces the same-key
+policy, removing an omitted route-map. Each table ID and target level has its own
+row. Sources follow FRR 10.7.1 per AF; sharp requires sharpd.
+Save persistent configuration with `config save -y`. Configuration show reads
+explicit/effective ConfigDB values; the other queries read FRR runtime state.
+
+Example, after enabling management-framework mode:
+
+```shell
+sudo config isis add CORE
+sudo config isis net CORE 49.0001.0000.0000.0001.00
+sudo config isis level CORE level-2
+sudo config interface isis ipv4 Ethernet0 enable --instance CORE
+sudo config interface isis network-type Ethernet0 p2p
+sudo config interface isis ipv4 Loopback0 enable --instance CORE
+sudo config interface isis passive Loopback0 enable
+show isis interface
+show isis neighbor
+```
 
 ## BGP
 
