@@ -7776,6 +7776,8 @@ VLAN interface names take the form of `vlan<vlan_id>`. E.g., VLAN 100 will be na
   admin@sonic:~$ sudo config interface vlan100 ip remove 10.11.12.13/24
   ```
 
+The last IPv4 address of a VLAN cannot be removed while the VLAN has DHCPv4 servers (`VLAN` `dhcp_servers` or `DHCPV4_RELAY`), and the last IPv6 address cannot be removed while it has DHCPv6 servers (`VLAN` `dhcpv6_servers` or `DHCP_RELAY`). Remove the DHCP servers first. The same check applies to `config interface vrf bind/unbind`, `config vrf del` and `config vnet del`, which remove the IP addresses of the affected VLANs.
+
 **config interface pfc priority <interface_name> <priority> (on | off)**
 
 This command is used to set PFC on a given priority of a given interface to either "on" or "off". Once it is successfully configured, it will show current losses priorities on the given interface. Otherwise, it will show error information
