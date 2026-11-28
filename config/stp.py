@@ -107,6 +107,16 @@ MST_MIN_PORT_PATH_COST = 1
 MST_MAX_PORT_PATH_COST = 200000000
 MST_DEFAULT_PORT_PATH_COST = 1
 
+
+def mst_inst_cfg_key(instance_id):
+    """Return YANG-compatible CONFIG_DB key for STP_MST_INST (list key: instance)."""
+    return str(instance_id)
+
+
+def mst_port_cfg_key(instance_id, interface_name):
+    """Return YANG-compatible CONFIG_DB key for STP_MST_PORT (keys: inst_id, ifname)."""
+    return f"{instance_id}|{interface_name}"
+
 MST_AUTO_LINK_TYPE = 'auto'
 MST_P2P_LINK_TYPE = 'p2p'
 MST_SHARED_LINK_TYPE = 'shared'
@@ -276,6 +286,11 @@ def get_stp_enabled_vlan_count(db):
 
 
 def vlan_enable_stp(db, vlan_name):
+    # MST maps VLANs through STP_MST_INST. STP_VLAN is PVST-only; MST
+    # STP|GLOBAL has no timer/priority fields, so writing them stores "None".
+    if get_global_stp_mode(db) == "mst":
+        return
+
     fvs = {'enabled': 'true',
            'forward_delay': get_global_stp_forward_delay(db),
            'hello_time': get_global_stp_hello_time(db),
@@ -290,15 +305,137 @@ def vlan_enable_stp(db, vlan_name):
 
 
 def interface_enable_stp(db, interface_name):
-    fvs = {'enabled': 'true',
-           'root_guard': 'false',
-           'bpdu_guard': 'false',
-           'bpdu_guard_do_disable': 'false',
-           'portfast': 'false',
-           'uplink_fast': 'false'
-           }
-    if is_global_stp_enabled(db):
-        db.set_entry('STP_PORT', interface_name, fvs)
+    if not is_global_stp_enabled(db):
+        return
+
+    mode = get_global_stp_mode(db)
+    if mode == "mst":
+        fvs = {
+            'edge_port': 'false',
+            'link_type': MST_AUTO_LINK_TYPE,
+            'enabled': 'true',
+            'root_guard': 'false',
+            'bpdu_guard': 'false',
+            'bpdu_guard_do_disable': 'false',
+            'priority': MST_DEFAULT_PORT_PRIORITY
+        }
+    else:
+        fvs = {
+            'enabled': 'true',
+            'root_guard': 'false',
+            'bpdu_guard': 'false',
+            'bpdu_guard_do_disable': 'false',
+            'portfast': 'false',
+            'uplink_fast': 'false'
+        }
+    db.set_entry('STP_PORT', interface_name, fvs)
+
+
+def _db_key_text(key):
+    if isinstance(key, (list, tuple)):
+        return "|".join(str(part) for part in key)
+    return str(key)
+
+
+def _vlan_id_text(vlan_name):
+    text = str(vlan_name)
+    if text.startswith("Vlan"):
+        return text[4:]
+    return text
+
+
+def _vlan_ids_from_mst_list(vlan_list):
+    vlan_ids = set()
+    if not vlan_list:
+        return vlan_ids
+    for token in str(vlan_list).split(","):
+        token = token.strip()
+        if not token:
+            continue
+        if "-" in token:
+            start, end = token.split("-", 1)
+            if start.isdigit() and end.isdigit() and int(start) <= int(end):
+                for vid in range(int(start), int(end) + 1):
+                    vlan_ids.add(str(vid))
+                continue
+        vlan_ids.add(token)
+    return vlan_ids
+
+
+def mst_instance_for_vlan(db, vlan_name):
+    """Return the MST instance that owns vlan_name. Unmapped VLANs stay in instance 0."""
+    vlan_id = _vlan_id_text(vlan_name)
+    for key, entry in (db.get_table('STP_MST_INST') or {}).items():
+        inst = _db_key_text(key)
+        if inst == "0" or not isinstance(entry, dict):
+            continue
+        if vlan_id in _vlan_ids_from_mst_list(entry.get('vlan_list', '')):
+            return inst
+    return "0"
+
+
+def _mst_port_key_parts(key):
+    if isinstance(key, (list, tuple)) and len(key) >= 2:
+        return str(key[0]), str(key[1])
+    text = str(key)
+    if "|" not in text:
+        return None, None
+    inst, ifname = text.split("|", 1)
+    return inst, ifname
+
+
+def ensure_stp_config_on_vlan_member_add(db, interface_name, vlan_name):
+    """Create STP_PORT and STP_MST_PORT when an interface joins a VLAN.
+
+    Existing rows are left unchanged so a re-add does not reset port priority,
+    edge-port, or link-type.
+    """
+    if not is_global_stp_enabled(db):
+        return
+
+    if not db.get_entry('STP_PORT', interface_name):
+        interface_enable_stp(db, interface_name)
+
+    if get_global_stp_mode(db) != "mst":
+        return
+
+    instances = {"0", mst_instance_for_vlan(db, vlan_name)}
+    for inst in sorted(instances, key=int):
+        key = mst_port_cfg_key(inst, interface_name)
+        if not db.get_entry('STP_MST_PORT', key):
+            db.set_entry('STP_MST_PORT', key, {'priority': MST_DEFAULT_PORT_PRIORITY})
+
+
+def clear_stp_config_on_vlan_member_delete(db, vlan_name, interface_name):
+    """Remove STP rows that no longer apply after interface leaves vlan_name.
+
+    VLAN_MEMBER still contains this membership when vlan member del calls in.
+    That VLAN is excluded from the remaining-member check.
+    """
+    if not is_global_stp_enabled(db):
+        return
+
+    db.set_entry('STP_VLAN_PORT', "{}|{}".format(vlan_name, interface_name), None)
+
+    remaining = [
+        vlan for vlan in get_vlan_list_for_interface(db, interface_name)
+        if str(vlan) != str(vlan_name)
+    ]
+
+    if get_global_stp_mode(db) == "mst":
+        remaining_instances = {mst_instance_for_vlan(db, vlan) for vlan in remaining}
+        if remaining:
+            # Instance 0 is the CIST port row for every interface that is still L2.
+            remaining_instances.add("0")
+        for key in db.get_keys('STP_MST_PORT') or []:
+            inst, ifname = _mst_port_key_parts(key)
+            if ifname != interface_name or inst is None:
+                continue
+            if inst not in remaining_instances:
+                db.set_entry('STP_MST_PORT', mst_port_cfg_key(inst, interface_name), None)
+
+    if not remaining:
+        db.set_entry('STP_PORT', interface_name, None)
 
 
 def is_vlan_configured_interface(db, interface_name):
@@ -435,7 +572,7 @@ def enable_mst_instance0(db):
         'bridge_priority': MST_DEFAULT_BRIDGE_PRIORITY
     }
     instance_id = 0
-    db.set_entry('STP_MST_INST', f"MST_INSTANCE:INSTANCE{instance_id}", mst_inst_fvs)
+    db.set_entry('STP_MST_INST', mst_inst_cfg_key(instance_id), mst_inst_fvs)
 
 
 def enable_mst_for_interfaces(db):
@@ -444,14 +581,12 @@ def enable_mst_for_interfaces(db):
         'link_type': MST_AUTO_LINK_TYPE,
         'enabled': 'true',
         'bpdu_guard': 'false',
-        'bpdu_guard_do': 'false',
+        'bpdu_guard_do_disable': 'false',
         'root_guard': 'false',
-        'path_cost': MST_DEFAULT_PORT_PATH_COST,
         'priority': MST_DEFAULT_PORT_PRIORITY
         }
 
     fvs_mst_port = {
-        'path_cost': MST_DEFAULT_PORT_PATH_COST,
         'priority': MST_DEFAULT_PORT_PRIORITY
         }
 
@@ -460,13 +595,13 @@ def enable_mst_for_interfaces(db):
 
     for port_key in port_dict:
         if port_key in intf_list_in_vlan_member_table:
-            db.set_entry('STP_MST_PORT', f"MST_INSTANCE|0|{port_key}", fvs_mst_port)
+            db.set_entry('STP_MST_PORT', mst_port_cfg_key(0, port_key), fvs_mst_port)
             db.set_entry('STP_PORT', port_key, fvs_port)
 
     po_ch_dict = natsorted(db.get_table('PORTCHANNEL'))
     for po_ch_key in po_ch_dict:
         if po_ch_key in intf_list_in_vlan_member_table:
-            db.set_entry('STP_MST_PORT', f"MST_INSTANCE|0|{po_ch_key}", fvs_mst_port)
+            db.set_entry('STP_MST_PORT', mst_port_cfg_key(0, po_ch_key), fvs_mst_port)
             db.set_entry('STP_PORT', po_ch_key, fvs_port)
 
 
@@ -1567,11 +1702,23 @@ def stp_interface_priority(_db, interface_name, priority_value):
 
     if stp_mode == "pvst":
         fvs.update({'portfast': 'false', 'uplink_fast': 'false'})
-    elif stp_mode == "mstp":
+    elif stp_mode == "mst":
         fvs.update({'edge_port': 'false', 'link_type': 'auto'})
 
     # Update the database entry
     db.mod_entry('STP_PORT', interface_name, fvs)
+
+    if stp_mode == "mst":
+        fvs_mst_port = {'priority': str(priority_value)}
+        mst_port_updated = False
+        for key in db.get_keys('STP_MST_PORT') or []:
+            inst, ifname = _mst_port_key_parts(key)
+            if ifname != interface_name or inst is None:
+                continue
+            db.mod_entry('STP_MST_PORT', mst_port_cfg_key(inst, interface_name), fvs_mst_port)
+            mst_port_updated = True
+        if not mst_port_updated:
+            db.mod_entry('STP_MST_PORT', mst_port_cfg_key(0, interface_name), fvs_mst_port)
 
 
 # config spanning_tree interface cost <ifname> <cost-value>
@@ -1717,7 +1864,7 @@ def mst_instance_interface_priority(_db, instance_id, interface_name, priority):
     check_if_interface_is_valid(ctx, db, interface_name)
 
     # Construct the key and field-value dictionary
-    mst_instance_interface_key = f"MST_INSTANCE|{instance_id}|{interface_name}"
+    mst_instance_interface_key = mst_port_cfg_key(instance_id, interface_name)
     fvs = {'priority': str(priority)}
 
     # Update the database entry
@@ -1758,7 +1905,7 @@ def mst_instance_interface_cost(_db, instance_id, interface_name, cost):
     check_if_interface_is_valid(ctx, db, interface_name)
 
     # Prepare key and value for database update
-    mst_instance_interface_key = f"MST_INSTANCE|{instance_id}|{interface_name}"
+    mst_instance_interface_key = mst_port_cfg_key(instance_id, interface_name)
     fvs = {'path_cost': str(cost)}
 
     # Update database entry
@@ -1783,7 +1930,7 @@ def mst_instance_priority(_db, instance_id, priority_value):
         ctx.fail(f"Instance ID must be in range 0-{MST_MAX_INSTANCES - 1}")
 
     # Check if instance exists
-    instance_key = f"MST_INSTANCE|{instance_id}"
+    instance_key = mst_inst_cfg_key(instance_id)
     if not db.get_entry('STP_MST_INST', instance_key):
         ctx.fail(f"MST instance {instance_id} does not exist. Please create it first.")
 
@@ -1824,7 +1971,7 @@ def mst_instance_vlan_add(_db, instance_id, vlan_id):
         ctx.fail("VLAN configuration for MST instance 0 is not allowed.")
 
     # Check if instance exists
-    instance_key = f"MST_INSTANCE|{instance_id}"
+    instance_key = mst_inst_cfg_key(instance_id)
     if not db.get_entry('STP_MST_INST', instance_key):
         ctx.fail(f"MST instance {instance_id} does not exist. Please create it first.")
 
@@ -1876,7 +2023,7 @@ def mst_instance_vlan_del(_db, instance_id, vlan_id):
         ctx.fail("VLAN delete from MST instance 0 is not allowed.")
 
     # Check if instance exists
-    instance_key = f"MST_INSTANCE|{instance_id}"
+    instance_key = mst_inst_cfg_key(instance_id)
     instance_entry = db.get_entry('STP_MST_INST', instance_key)
     if not instance_entry:
         ctx.fail(f"MST instance {instance_id} does not exist.")

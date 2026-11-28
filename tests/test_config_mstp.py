@@ -26,6 +26,7 @@ from config.stp import (
     is_valid_stp_vlan_parameters,
     is_valid_stp_global_parameters,
     enable_stp_for_vlans,
+    vlan_enable_stp,
     get_vlan_list_for_interface,
     is_global_stp_enabled,
     check_if_global_stp_enabled,
@@ -235,6 +236,43 @@ def test_is_valid_stp_vlan_parameters():
     )
 
 
+def test_vlan_enable_stp_skips_mst():
+    mock_db = MagicMock()
+    mock_db.get_entry.return_value = {"mode": "mst"}
+
+    vlan_enable_stp(mock_db, "Vlan100")
+
+    mock_db.set_entry.assert_not_called()
+
+
+def test_vlan_enable_stp_pvst():
+    mock_db = MagicMock()
+
+    def get_entry(table, key):
+        if table == "STP":
+            return {
+                "mode": "pvst",
+                "forward_delay": "15",
+                "hello_time": "2",
+                "max_age": "20",
+                "priority": "32768",
+            }
+        return {}
+
+    mock_db.get_entry.side_effect = get_entry
+    mock_db.get_table.return_value = {}
+
+    vlan_enable_stp(mock_db, "Vlan100")
+
+    mock_db.set_entry.assert_called_once_with('STP_VLAN', 'Vlan100', {
+        'enabled': 'true',
+        'forward_delay': '15',
+        'hello_time': '2',
+        'max_age': '20',
+        'priority': '32768',
+    })
+
+
 def test_enable_stp_for_vlans():
     mock_db = MagicMock()
     mock_db.get_table.return_value = ["Vlan10", "Vlan20"]
@@ -345,25 +383,23 @@ def test_enable_mst_for_interfaces():
         'link_type': MST_AUTO_LINK_TYPE,
         'enabled': 'true',
         'bpdu_guard': 'false',
-        'bpdu_guard_do': 'false',
+        'bpdu_guard_do_disable': 'false',
         'root_guard': 'false',
-        'path_cost': MST_DEFAULT_PORT_PATH_COST,
         'priority': MST_DEFAULT_PORT_PRIORITY
     }
 
     expected_fvs_mst_port = {
-        'path_cost': MST_DEFAULT_PORT_PATH_COST,
         'priority': MST_DEFAULT_PORT_PRIORITY
     }
 
-    # Assert that set_entry was called with the correct key names
-    mock_db.set_entry.assert_any_call('STP_MST_PORT', 'MST_INSTANCE|0|Ethernet0', expected_fvs_mst_port)
-    mock_db.set_entry.assert_any_call('STP_MST_PORT', 'MST_INSTANCE|0|PortChannel1', expected_fvs_mst_port)
+    mock_db.set_entry.assert_any_call('STP_MST_PORT', '0|Ethernet0', expected_fvs_mst_port)
+    mock_db.set_entry.assert_any_call('STP_MST_PORT', '0|PortChannel1', expected_fvs_mst_port)
     mock_db.set_entry.assert_any_call('STP_PORT', 'Ethernet0', expected_fvs_port)
     mock_db.set_entry.assert_any_call('STP_PORT', 'PortChannel1', expected_fvs_port)
 
-    # Ensure the correct number of calls were made to set_entry
     assert mock_db.set_entry.call_count == 4
+    for call in mock_db.set_entry.call_args_list:
+        assert 'path_cost' not in call.args[2]
 
 
 def test_check_if_global_stp_enabled():
@@ -425,7 +461,7 @@ def test_enable_mst_instance0():
 
     # Assert that set_entry was called with the correct arguments
     mock_db.set_entry.assert_called_once_with(
-        'STP_MST_INST', 'MST_INSTANCE:INSTANCE0', expected_mst_inst_fvs
+        'STP_MST_INST', '0', expected_mst_inst_fvs
     )
 
 

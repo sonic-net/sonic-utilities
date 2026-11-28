@@ -134,7 +134,7 @@ def add_vlan(ctx, vid, multiple):
             if clicommon.check_if_vlanid_exist(config_db, vlan, "DHCP_RELAY"):
                 ctx.fail("DHCPv6 relay config for {} already exists".format(vlan))
 
-            # Enable STP on VLAN if PVST is enabled globally
+            # Enable STP on VLAN when PVST is enabled. vlan_enable_stp skips MST.
             stp.vlan_enable_stp(config_db, vlan)
 
             # set dhcpv4_relay table
@@ -158,20 +158,12 @@ def delete_db_entry(entry_name, db_connector, db_name):
         db_connector.delete(db_name, entry_name)
 
 
-def enable_stp_on_port(db, port):
-    if stp.is_global_stp_enabled(db) is True:
-        vlan_list_for_intf = stp.get_vlan_list_for_interface(db, port)
-        if len(vlan_list_for_intf) == 0:
-            stp.interface_enable_stp(db, port)
+def enable_stp_on_port(db, port, vlan):
+    stp.ensure_stp_config_on_vlan_member_add(db, port, vlan)
 
 
 def disable_stp_on_vlan_port(db, vlan, port):
-    if stp.is_global_stp_enabled(db) is True:
-        vlan_interface = str(vlan) + "|" + port
-        db.set_entry('STP_VLAN_PORT', vlan_interface, None)
-        vlan_list_for_intf = stp.get_vlan_list_for_interface(db, port)
-        if len(vlan_list_for_intf) == 0:
-            db.set_entry('STP_PORT', port, None)
+    stp.clear_stp_config_on_vlan_member_delete(db, vlan, port)
 
 
 def disable_stp_on_vlan(db, vlan_interface):
@@ -401,7 +393,7 @@ def add_vlan_member(ctx, vid, port, untagged, multiple, except_flag):
                 pass
 
             # If port is being made L2 port, enable STP
-            enable_stp_on_port(db.cfgdb, port)
+            enable_stp_on_port(db.cfgdb, port, vlan)
 
             try:
                 db.cfgdb.set_entry('VLAN_MEMBER', (vlan, port), {'tagging_mode': "untagged" if untagged else "tagged"})
