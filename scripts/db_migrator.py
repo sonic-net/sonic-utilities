@@ -11,10 +11,14 @@ from sonic_py_common import device_info, logger
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector, SonicDBConfig
 from minigraph import parse_xml
 from utilities_common.helper import update_config
+from utilities_common.dangling_interface_references import (KNOWN_TARGETS, REFERENCE_TABLES,
+                                                            interface_reference_rules, may_dangle, ports_missing,
+                                                            plan_dangling_interface_repairs)
 
 INIT_CFG_FILE = '/etc/sonic/init_cfg.json'
 MINIGRAPH_FILE = '/etc/sonic/minigraph.xml'
 GOLDEN_CFG_FILE = '/etc/sonic/golden_config_db.json'
+YANG_DIR = '/usr/local/yang-models'
 
 # mock the redis for unit test purposes #
 try:
@@ -966,6 +970,81 @@ class DBMigrator():
                 log.log_info(f"Migrating STATE_DB {state_db_key}, ecn mode: {ecn_mode} -> copy_from_outer")
                 self.stateDB.set(self.stateDB.STATE_DB, state_db_key, 'ecn_mode', 'copy_from_outer')
 
+    def load_yang_models(self):
+        """
+        Load this image's YANG models as a SonicYang, or None when they fail to
+        load. Loading them takes a while, so only call this when there is
+        something to write.
+        """
+        try:
+            import sonic_yang
+            sy = sonic_yang.SonicYang(YANG_DIR)
+            sy.loadYangModel()
+        except Exception as e:
+            log.log_error(f"Failed to load the YANG models: {str(e)}")
+            return None
+        return sy
+
+    def migrate_dangling_interface_references(self):
+        """
+        Repair each reference to an interface that this image's models refuse
+        because the row it names does not exist (see INTERFACE_REFERENCES and
+        plan_dangling_interface_repairs): the field or the leaf-list element
+        goes, or the row when the model needs the field. Interface and VLAN
+        removals on older images left such references behind, and one of them
+        fails every validation of the config, which blocks every GCU patch on
+        the switch.
+        """
+        config = {}
+
+        def read(tables):
+            for table in tables:
+                if table in config:
+                    continue
+                try:
+                    config[table] = self.configDB.get_table(table)
+                except Exception as e:
+                    log.log_error(f"Failed to read {table} table: {str(e)}")
+                    return False
+            return True
+
+        if not read(REFERENCE_TABLES + KNOWN_TARGETS) or not may_dangle(config):
+            return
+        sy = self.load_yang_models()
+        if sy is None:
+            return
+        try:
+            rules = interface_reference_rules(sy)
+        except Exception as e:
+            # A boot step: a model this code cannot read must not stop the migrations after it.
+            log.log_error(f"Could not derive interface reference rules from the YANG models: {str(e)}. "
+                          "References left unchanged")
+            return
+        targets = sorted({target for rule in rules.values() for target in rule.targets})
+        if not read(targets):
+            return
+        if targets and not any(config[table] for table in targets):
+            # A switch always has ports, and an empty read is a broken database,
+            # not a reason to drop every reference.
+            log.log_warning(f"No rows in any of {', '.join(targets)}, so the interface references are left alone")
+            return
+        if any(ports_missing(config, rule) for rule in rules.values()):
+            # plan_dangling_interface_repairs skips each spec that targets PORT.
+            log.log_warning("No rows in PORT, so the references that may name a port are left alone")
+
+        for repair in plan_dangling_interface_repairs(config, rules):
+            name = "|".join(repair.key) if isinstance(repair.key, tuple) else repair.key
+            try:
+                if repair.entry is None:
+                    self.configDB.set_entry(repair.table, repair.key, None)
+                else:
+                    self.configDB.set_entry(repair.table, repair.key, repair.entry or {"NULL": "NULL"})
+            except Exception as e:
+                log.log_error(f"Failed to repair {repair.table}|{name}: {str(e)}")
+                continue
+            for reason in repair.reasons:
+                log.log_warning(reason)
+
     def version_unknown(self):
         """
         version_unknown tracks all SONiC versions that doesn't have a version
@@ -1437,6 +1516,7 @@ class DBMigrator():
         Version 202605_01
         """
         log.log_info('Handling version_202605_01')
+        self.migrate_dangling_interface_references()
         return None
 
     def get_version(self):

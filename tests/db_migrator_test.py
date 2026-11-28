@@ -1,3 +1,4 @@
+import contextlib
 import os
 import pytest
 import sys
@@ -1172,3 +1173,216 @@ class TestIPinIPTunnelEcnModeMigrator(object):
         expected_state_db = SonicV2Connector(host='127.0.0.1')
         expected_state_db.connect(expected_state_db.STATE_DB)
         self.compare_keys(expected_state_db, dbmgtr.stateDB, 'STATE_DB')
+
+
+class TestDanglingInterfaceReferencesMigrator(object):
+    """
+    A reference to an interface that no longer exists is repaired for each
+    spec the models give a rule: a source interface field is deleted, and a
+    leaf-list loses the element.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        dbconnector.dedicated_dbs['CONFIG_DB'] = None
+
+    TARGETS = [("PORT", "Ethernet0", {"lanes": "0"}), ("PORTCHANNEL", "PortChannel0001", {"mtu": "9100"}),
+               ("VLAN", "Vlan100", {"vlanid": "100"}), ("LOOPBACK_INTERFACE", "Loopback0", {"NULL": "NULL"}),
+               ("MGMT_PORT", "eth0", {"admin_status": "up"})]
+    DANGLING = {
+        ("TACPLUS", "global"): {"src_intf": "Vlan200", "timeout": "5"},
+        ("SFLOW", "global"): {"agent_id": "Ethernet8", "admin_state": "up"},
+        ("NTP", "global"): {"src_intf": ["eth0", "Ethernet12"], "vrf": "default"},
+        ("RADIUS_SERVER", "10.0.0.10"): {"src_intf": "Ethernet16", "priority": "1"},
+    }
+    REPAIRED = {
+        ("TACPLUS", "global"): {"timeout": "5"},
+        ("SFLOW", "global"): {"admin_state": "up"},
+        ("NTP", "global"): {"src_intf": ["eth0"], "vrf": "default"},
+        ("RADIUS_SERVER", "10.0.0.10"): {"priority": "1"},
+    }
+    KEPT = {("RADIUS_SERVER", "10.0.0.9"): {"src_intf": "PortChannel0001", "priority": "1"}}
+
+    def rules(self):
+        import re
+        from utilities_common.dangling_interface_references import INTERFACE_REFERENCES, InterfaceRule
+        specs = {(spec.table, spec.leaf): spec for spec in INTERFACE_REFERENCES}
+        sources = ("PORT", "PORTCHANNEL", "VLAN", "LOOPBACK_INTERFACE", "MGMT_PORT")
+        return {
+            specs["TACPLUS", "src_intf"]: InterfaceRule((), sources, 0),
+            specs["SFLOW", "agent_id"]: InterfaceRule((), sources, 0),
+            specs["NTP", "src_intf"]: InterfaceRule(
+                (((re.compile("eth0"), False),),), ("PORT", "PORTCHANNEL", "LOOPBACK_INTERFACE", "MGMT_PORT"), 0),
+            specs["RADIUS_SERVER", "src_intf"]: InterfaceRule((), sources, 0),
+        }
+
+    def migrator(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(
+            mock_db_path, 'config_db', 'dns_nameserver_expected')
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+        dbmgtr.load_yang_models = mock.Mock()
+        for table, key, entry in self.TARGETS:
+            dbmgtr.configDB.set_entry(table, key, entry)
+        for (table, key), entry in list(self.DANGLING.items()) + list(self.KEPT.items()):
+            dbmgtr.configDB.set_entry(table, key, entry)
+        return dbmgtr
+
+    def rows(self, dbmgtr):
+        return {(table, key): dbmgtr.configDB.get_entry(table, key)
+                for table, key in list(self.DANGLING) + list(self.KEPT)}
+
+    def migrate(self, dbmgtr, rules=None):
+        with mock.patch('db_migrator.interface_reference_rules',
+                        return_value=self.rules() if rules is None else rules):
+            dbmgtr.migrate_dangling_interface_references()
+
+    def test_dangling_fields_and_elements_are_removed(self):
+        dbmgtr = self.migrator()
+        with mock.patch('db_migrator.log.log_warning') as log_warning:
+            self.migrate(dbmgtr)
+
+        assert self.rows(dbmgtr) == {**self.REPAIRED, **self.KEPT}
+        log_warning.assert_any_call("TACPLUS|global src_intf Vlan200 dropped: it is in none of PORT, PORTCHANNEL, "
+                                    "VLAN, LOOPBACK_INTERFACE, MGMT_PORT")
+        log_warning.assert_any_call("NTP|global src_intf Ethernet12 dropped: in none of PORT, PORTCHANNEL, "
+                                    "LOOPBACK_INTERFACE, MGMT_PORT")
+        log_warning.assert_any_call("RADIUS_SERVER|10.0.0.10 src_intf Ethernet16 dropped: it is in none of PORT, "
+                                    "PORTCHANNEL, VLAN, LOOPBACK_INTERFACE, MGMT_PORT")
+
+    def test_an_emptied_leaf_list_is_deleted(self):
+        dbmgtr = self.migrator()
+        dbmgtr.configDB.set_entry("NTP", "global", {"src_intf": ["Ethernet12"], "vrf": "default"})
+        self.migrate(dbmgtr)
+
+        assert dbmgtr.configDB.get_entry("NTP", "global") == {"vrf": "default"}
+
+    def test_a_row_left_empty_keeps_its_key(self):
+        dbmgtr = self.migrator()
+        dbmgtr.configDB.set_entry("TACPLUS", "global", {"src_intf": "Vlan200"})
+        self.migrate(dbmgtr)
+
+        assert "global" in dbmgtr.configDB.get_keys("TACPLUS")
+        assert "src_intf" not in dbmgtr.configDB.get_entry("TACPLUS", "global")
+
+    def test_an_empty_port_table_keeps_port_references(self):
+        dbmgtr = self.migrator()
+        dbmgtr.configDB.set_entry("PORT", "Ethernet0", None)
+        with mock.patch('db_migrator.log.log_warning') as log_warning:
+            self.migrate(dbmgtr)
+
+        # Loopback0 and the other target rows are left, so only the PORT guard keeps Ethernet12 and Ethernet16.
+        assert dbmgtr.configDB.get_keys("LOOPBACK_INTERFACE") == ["Loopback0"]
+        assert self.rows(dbmgtr) == {**self.DANGLING, **self.KEPT}
+        log_warning.assert_any_call("No rows in PORT, so the references that may name a port are left alone")
+
+    def test_rows_are_kept_when_the_models_reference_no_table(self):
+        dbmgtr = self.migrator()
+        self.migrate(dbmgtr, rules={})
+
+        assert self.rows(dbmgtr) == {**self.DANGLING, **self.KEPT}
+
+    def test_only_the_table_with_a_rule_is_touched(self):
+        dbmgtr = self.migrator()
+        self.migrate(dbmgtr, rules={spec: rule for spec, rule in self.rules().items() if spec.table == "NTP"})
+
+        expected = {**self.DANGLING, **self.KEPT}
+        expected[("NTP", "global")] = self.REPAIRED[("NTP", "global")]
+        assert self.rows(dbmgtr) == expected
+
+    def test_nothing_dangling_loads_no_models(self):
+        dbmgtr = self.migrator()
+        for (table, key), entry in self.REPAIRED.items():
+            dbmgtr.configDB.set_entry(table, key, None)
+            dbmgtr.configDB.set_entry(table, key, entry)
+
+        dbmgtr.migrate_dangling_interface_references()
+
+        dbmgtr.load_yang_models.assert_not_called()
+
+    def test_no_references_loads_no_models(self):
+        dbmgtr = self.migrator()
+        for table, key in list(self.DANGLING) + list(self.KEPT):
+            dbmgtr.configDB.set_entry(table, key, None)
+
+        dbmgtr.migrate_dangling_interface_references()
+
+        dbmgtr.load_yang_models.assert_not_called()
+
+    def test_no_interfaces_at_all_is_a_noop(self):
+        dbmgtr = self.migrator()
+        for table, key, _ in self.TARGETS:
+            dbmgtr.configDB.set_entry(table, key, None)
+
+        with mock.patch.object(dbmgtr.configDB, 'set_entry') as mock_set:
+            self.migrate(dbmgtr)
+
+        mock_set.assert_not_called()
+
+    def test_is_idempotent(self):
+        dbmgtr = self.migrator()
+        self.migrate(dbmgtr)
+        with mock.patch.object(dbmgtr.configDB, 'set_entry') as mock_set:
+            self.migrate(dbmgtr)
+
+        mock_set.assert_not_called()
+        assert self.rows(dbmgtr) == {**self.REPAIRED, **self.KEPT}
+
+    def test_unwritable_row_does_not_stop_the_others(self):
+        dbmgtr = self.migrator()
+        set_entry = dbmgtr.configDB.set_entry
+
+        def failing_set_entry(table, key, data):
+            if table == "TACPLUS":
+                raise RuntimeError("write failed")
+            return set_entry(table, key, data)
+
+        with mock.patch.object(dbmgtr.configDB, 'set_entry', side_effect=failing_set_entry), \
+                mock.patch('db_migrator.log.log_error') as log_error:
+            self.migrate(dbmgtr)
+
+        expected = {**self.REPAIRED, **self.KEPT}
+        expected[("TACPLUS", "global")] = self.DANGLING[("TACPLUS", "global")]
+        assert self.rows(dbmgtr) == expected
+        log_error.assert_any_call("Failed to repair TACPLUS|global: write failed")
+
+    def test_unloadable_models_drop_nothing(self):
+        dbmgtr = self.migrator()
+        dbmgtr.load_yang_models.return_value = None
+        dbmgtr.migrate_dangling_interface_references()
+
+        assert self.rows(dbmgtr) == {**self.DANGLING, **self.KEPT}
+
+    def test_unreadable_models_change_nothing_and_the_migration_goes_on(self):
+        dbmgtr = self.migrator()
+        others = [name for name in dir(dbmgtr)
+                  if name.startswith('migrate_') and name != 'migrate_dangling_interface_references']
+        with contextlib.ExitStack() as stack:
+            for name in others:
+                stack.enter_context(mock.patch.object(dbmgtr, name))
+            common_ops = stack.enter_context(mock.patch.object(dbmgtr, 'common_migration_ops'))
+            stack.enter_context(mock.patch.object(dbmgtr, 'get_version', return_value='version_202605_01'))
+            log_error = stack.enter_context(mock.patch('db_migrator.log.log_error'))
+            stack.enter_context(mock.patch('db_migrator.interface_reference_rules',
+                                           side_effect=AttributeError("no union_member_types")))
+            dbmgtr.migrate()
+
+        assert self.rows(dbmgtr) == {**self.DANGLING, **self.KEPT}
+        log_error.assert_called_once_with(
+            "Could not derive interface reference rules from the YANG models: no union_member_types. "
+            "References left unchanged")
+        common_ops.assert_called_once_with()
+
+    def test_wired_into_version_202605_01(self):
+        dbmgtr = self.migrator()
+        # Stub every migration, so ones added to the handler later cannot fail this test.
+        with contextlib.ExitStack() as stack:
+            stubs = {name: stack.enter_context(mock.patch.object(dbmgtr, name))
+                     for name in dir(dbmgtr) if name.startswith('migrate_')}
+            assert dbmgtr.version_202605_01() is None
+        stubs['migrate_dangling_interface_references'].assert_called_once_with()
