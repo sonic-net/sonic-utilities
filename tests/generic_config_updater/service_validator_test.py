@@ -213,7 +213,7 @@ test_vlanintf_data = [
             "upd": { "VLAN_INTERFACE": {
                 "Vlan1000": {},
                 "Vlan1000|192.168.0.2/21": {} } },
-            "cmd": "ip neigh flush dev Vlan1000 192.168.0.1/21"
+            "cmd": "ip -j neigh show dev Vlan1000 to 192.168.0.1/21 nud all"
         },
         {
             "old": { "VLAN_INTERFACE": {
@@ -230,7 +230,7 @@ test_vlanintf_data = [
                 "Vlan1000": {},
                 "Vlan1000|192.168.0.1/21": {} } },
             "upd": {},
-            "cmd": "ip neigh flush dev Vlan1000 192.168.0.1/21"
+            "cmd": "ip -j neigh show dev Vlan1000 to 192.168.0.1/21 nud all"
         }
    ]
 
@@ -262,7 +262,7 @@ test_vlanintf_failure_data = [
                 }
             },
             "upd": {},
-            "cmd": "ip neigh flush dev Vlan9999 192.168.99.1/24",
+            "cmd": "ip -j neigh show dev Vlan9999 to 192.168.99.1/24 nud all",
             "rc": 1,
             "stderr": "Cannot find device \"Vlan9999\"\n",
             "expected_result": False,
@@ -283,7 +283,7 @@ test_vlanintf_failure_data = [
                     "Vlan1000|192.168.0.1/21": {}
                 }
             },
-            "cmd": "ip neigh flush dev Vlan9999 10.10.10.1/24",
+            "cmd": "ip -j neigh show dev Vlan9999 to 10.10.10.1/24 nud all",
             "rc": 255,
             "stdout": "Flushing neighbors...\n",
             "stderr": "Device \"Vlan9999\" does not exist.\n",
@@ -298,7 +298,7 @@ test_vlanintf_failure_data = [
                 }
             },
             "upd": {},
-            "cmd": "ip neigh flush dev Vlan1000 192.168.0.1/21",
+            "cmd": "ip -j neigh show dev Vlan1000 to 192.168.0.1/21 nud all",
             "rc": 2,
             "stderr": "RTNETLINK answers: No such file or directory\n",
             "expected_result": True,
@@ -312,7 +312,7 @@ test_vlanintf_failure_data = [
                 }
             },
             "upd": {},
-            "cmd": "ip neigh flush dev Vlan1000 192.168.0.1/21",
+            "cmd": "ip -j neigh show dev Vlan1000 to 192.168.0.1/21 nud all",
             "rc": 127,
             "stderr": "sh: ip: No such file or directory\n",
             "expected_result": False,
@@ -569,6 +569,47 @@ class TestServiceValidator(unittest.TestCase):
 
             assert result == entry["expected_result"], \
                 f"{msg} - Expected {entry['expected_result']} but got {result}"
+
+    @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_vlanintf_validator_keeps_extern_learn_neighbors(self, mock_subprocess):
+        """Entries a control plane owns (extern_learn, e.g. zebra's EVPN remote hosts) are not deleted: zebra
+        installs them again at once, which made `ip neigh flush` give up after 10 rounds"""
+        global subprocess_calls, subprocess_call_index
+
+        mock_subprocess.side_effect = mock_subprocess_run
+        old = {"VLAN_INTERFACE": {"Vlan2010": {}, "Vlan2010|fc00:210::1/64": {}}}
+        neighbors = (
+            '[{"dst":"fc00:210::20","lladdr":"02:4c:52:00:00:20","state":["REACHABLE"]},'
+            '{"dst":"fc00:210::50","lladdr":"02:4c:52:0a:00:50","extern_learn":null,'
+            '"protocol":"zebra","state":["NOARP"]},'
+            # extern_learn without NOARP: only the extern_learn check keeps this one
+            '{"dst":"fc00:210::51","lladdr":"02:4c:52:0a:00:51","extern_learn":null,"state":["REACHABLE"]},'
+            '{"dst":"fc00:210::60","lladdr":"02:4c:52:0a:00:60","state":["PERMANENT"]},'
+            '{"dst":"fc00:210::70","state":["NOARP"]},'
+            '{"state":["REACHABLE"]},'
+            '{"dst":"fc00:210::22","lladdr":"02:4c:52:00:00:22","state":["STALE"]}]')
+        show = {"cmd": "ip -j neigh show dev Vlan2010 to fc00:210::1/64 nud all", "rc": 0, "stdout": neighbors}
+        cases = [
+            ([{"cmd": "ip neigh del fc00:210::20 dev Vlan2010", "rc": 0},
+              {"cmd": "ip neigh del fc00:210::22 dev Vlan2010", "rc": 0}], True),
+            ([{"cmd": "ip neigh del fc00:210::20 dev Vlan2010", "rc": 2,
+               "stderr": "RTNETLINK answers: No such file or directory\n"},
+              {"cmd": "ip neigh del fc00:210::22 dev Vlan2010", "rc": 0}], True),
+            ([{"cmd": "ip neigh del fc00:210::20 dev Vlan2010", "rc": 2,
+               "stderr": "RTNETLINK answers: Operation not permitted\n"},
+              {"cmd": "ip neigh del fc00:210::22 dev Vlan2010", "rc": 0}], False),
+        ]
+        for dels, expected in cases:
+            subprocess_calls = [show] + dels
+            subprocess_call_index = 0
+            assert vlanintf_validator(old, {}, None) == expected, str(dels)
+            assert subprocess_call_index == len(subprocess_calls), str(dels)
+
+        for out, expected in (("", True), ("[]", True), ("not json", False), ("null", False), ('{"dst": 1}', False)):
+            subprocess_calls = [dict(show, stdout=out)]
+            subprocess_call_index = 0
+            assert vlanintf_validator(old, {}, None) is expected, out
+            assert subprocess_call_index == 1, out
 
     @patch("generic_config_updater.services_validator.subprocess.run")
     def test_gnmi_validator(self, mock_subprocess):
